@@ -219,6 +219,7 @@ class GameService:
                     "position": t["position"],
                     "validated": bool(t["corrected_translation"]),
                     "translatable": bool(t["translatable"]),
+                    "metadata": t.get("metadata", {}),
                 }
             )
         return {"game": game, "texts": texts, "skipped": skipped}

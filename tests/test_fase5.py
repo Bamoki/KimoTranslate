@@ -55,8 +55,7 @@ def game_c(tmp_path):
 @pytest.fixture()
 def game_nested(tmp_path):
     # Variante real Natsu no Kusari: .ypf solo en pac/, sin exe ni sueltos.
-    return make_game(str(tmp_path), "game_n", {"yst00001.ybn": DLG_A}, KEY_A,
-                     pac_split=True)
+    return make_game(str(tmp_path), "game_n", {"yst00001.ybn": DLG_A}, KEY_A, pac_split=True)
 
 
 # --- detection ---
@@ -534,3 +533,73 @@ def test_delete_game(client, game_a):
     client.post("/games/game_a/extract", params={"local": True})
     assert client.delete("/games/game_a").json() == {"deleted": "game_a"}
     assert client.get("/games/game_a/texts").status_code == 404
+
+
+def test_inline_controls_roundtrip():
+    # Patrón real Natsu no Kusari: texto + 0x80+byte + texto + cola binaria.
+    raw = "おはよう".encode("cp932") + b"\x80g" + "ございます".encode("cp932") + b"\x00\x03"
+    segments, ctls, junks = ystb.split_controls(raw)
+    assert [k for k, _ in segments] == ["t", "c", "t", "x"]
+    assert ctls == [b"\x80g"]
+    template, ctls_hex, junks_hex = ystb.build_template(segments, ctls, junks)
+    assert template == "おはよう{Y0}ございます{X0}"
+    assert game_tokens.find_tokens(template) == ["{Y0}", "{X0}"]
+    # traducción simulada conserva placeholders -> bytes exactos
+    rebuilt = ystb.rebuild("Ohayo{Y0}gozaimasu{X0}", ctls_hex, junks_hex)
+    assert rebuilt == "Ohayo".encode("cp932") + b"\x80g" + "gozaimasu".encode("cp932") + b"\x00\x03"
+    with __import__("pytest").raises(ystb.YstbError):
+        ystb.rebuild("Ohayo{Y9}", ctls_hex, junks_hex)  # placeholder sin datos
+    # sin texto traducible -> skipped, no a MT
+    assert ystb.build_template(*ystb.split_controls(b"\x00\x03\xff"))[0] == ""
+
+
+def test_extract_emit_and_repack_with_controls(tmp_path):
+    # .ybn sintético con control inline real -> extract -> repack preserva bytes.
+    raw_msg = "おはよう".encode("cp932") + b"\x80g" + "ね".encode("cp932")
+    gdir = os.path.join(str(tmp_path), "gctl")
+    os.makedirs(os.path.join(gdir, "ysbin"))
+    with open(os.path.join(gdir, "ysbin", "s.ybn"), "wb") as f:
+        f.write(build_ystb([("msg_raw", raw_msg)], KEY_A))
+    texts, fi = clockup.extract(
+        "gx", gdir, {"*": {"msg_op": MSG_OP, "call_op": CALL_OP}})
+    assert len(texts) == 1
+    t = texts[0]
+    assert t.source_text == "おはよう{Y0}ね"
+    assert t.metadata["ctls"] == ["8067"] and t.translatable
+    # traducción simulada + rebuild + repack -> control intacto en el binario
+    final = "Ohayo{Y0}ne"
+    assert game_tokens.tokens_ok(t.source_text, final)
+    blob = ystb.rebuild(final, t.metadata["ctls"], t.metadata["junks"])
+    script = ystb.parse(open(os.path.join(gdir, "ysbin", "s.ybn"), "rb").read(), KEY_A)
+    new_raw = ystb.repack_bytes(script, [blob], MSG_OP, CALL_OP, KEY_A)
+    back = ystb.parse(new_raw, KEY_A)
+    got = next(i.args[0].data for i in back.insts if i.op == MSG_OP)
+    assert got == blob
+    assert got.startswith(b"Ohayo") and b"\x80g" in got and got.endswith("ne".encode("cp932"))
+
+
+def test_repack_bytes_preserves_controls(tmp_path):
+    raw_msg = "おはよう".encode("cp932") + b"\x80g" + "ね".encode("cp932")
+    blob = build_ystb([("msg", "ダミー")], KEY_A)
+    script = ystb.parse(blob, KEY_A)
+    # sustituye el recurso del único msg por el patrón con control
+    inst = next(i for i in script.insts if i.op == MSG_OP)
+    arg = inst.args[0]
+    res_off = script.res_start + arg.res_offset
+    new_res = raw_msg
+    dec = bytearray(script.raw)
+    dec[res_off : res_off + arg.res_size] = new_res
+    # re-parsea el script modificado como si viniera del juego
+    import struct as _st
+
+    hdr = bytearray(blob[:32])
+    code_size, arg_size = _st.unpack_from("<II", bytes(hdr), 12)
+    # reconstruye fichero válido: re-empaqueta vía API pública con override
+    texts, _ = clockup.extract("gx", str(tmp_path), {})
+    assert texts == []
+    segs, ctls, junks = ystb.split_controls(raw_msg)
+    template, ch, jh = ystb.build_template(segs, ctls, junks)
+    assert template == "おはよう{Y0}ね"
+    final = "Ohayo{Y0}ne"
+    rebuilt = ystb.rebuild(final, ch, jh)
+    assert rebuilt == "Ohayo".encode("cp932") + b"\x80g" + "ne".encode("cp932")

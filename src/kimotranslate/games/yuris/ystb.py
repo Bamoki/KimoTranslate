@@ -9,6 +9,7 @@ Repack: strings nuevas al tail de recursos + parcheo de offsets (cualquier longi
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass, field
 
@@ -143,13 +144,127 @@ def decode(data: bytes) -> str | None:
         return None
 
 
+def _is_trail(b: int) -> bool:
+    return 0x40 <= b <= 0xFC and b != 0x7F
+
+
+def _is_lead(b: int) -> bool:
+    return 0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC
+
+
+def _try_pair(b1: int, b2: int) -> bytes | None:
+    """Par SJIS válido solo si decodifica (hay huecos indefinidos en cp932)."""
+    try:
+        bytes((b1, b2)).decode("cp932")
+        return bytes((b1, b2))
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+def split_controls(data: bytes) -> tuple[list, list[bytes], list[bytes]]:
+    """Segmenta un recurso YSTB en texto traducible y bytes preservados.
+
+    Devuelve (segments, controls, junks):
+    - ('t', bytes): texto (ASCII imprimible, pares SJIS válidos, \\n).
+    - ('c', idx): control inline YU-RIS (0x80 + 1 byte) -> controls[idx].
+    - ('x', idx): resto binario (NULs, colas) -> junks[idx] (roundtrip exacto).
+    Sin texto traducible en todo el blob: segments == [] (marcar skipped).
+    """
+    segments, controls, junks = [], [], []
+    text_run, junk_run = bytearray(), bytearray()
+
+    def flush_text():
+        if text_run:
+            segments.append(("t", bytes(text_run)))
+            text_run.clear()
+
+    def flush_junk():
+        if junk_run:
+            junks.append(bytes(junk_run))
+            segments.append(("x", len(junks) - 1))
+            junk_run.clear()
+
+    i, n = 0, len(data)
+    while i < n:
+        b = data[i]
+        if b == 0x80 and i + 1 < n:
+            flush_text()
+            flush_junk()
+            controls.append(data[i : i + 2])
+            segments.append(("c", len(controls) - 1))
+            i += 2
+        elif b == 0x0A or 0x20 <= b <= 0x7E:
+            flush_junk()
+            text_run.append(b)
+            i += 1
+        elif _is_lead(b) and i + 1 < n and _is_trail(data[i + 1]):
+            pair = _try_pair(b, data[i + 1])
+            if pair is None:
+                flush_text()
+                junk_run.append(b)
+                i += 1
+                continue
+            flush_junk()
+            text_run.extend(pair)
+            i += 2
+        else:
+            flush_text()
+            junk_run.append(b)
+            i += 1
+    flush_text()
+    flush_junk()
+    if not any(k == "t" for k, _ in segments):
+        return [], controls, junks
+    return segments, controls, junks
+
+
+def build_template(
+    segments: list, controls: list[bytes], junks: list[bytes]
+) -> tuple[str, list[str], list[str]]:
+    """Template con placeholders {Y#} (controles) y {X#} (binario).
+
+    Devuelve (template_str, controls_hex, junks_hex). Solo para segmentos
+    con texto; sin texto devuelve ("", [], []) y el slot se marca skipped.
+    """
+    if not any(k == "t" for k, _ in segments):
+        return "", [], []
+    parts = []
+    for kind, val in segments:
+        if kind == "t":
+            parts.append(val.decode("cp932"))
+        elif kind == "c":
+            parts.append(f"{{Y{val}}}")
+        else:
+            parts.append(f"{{X{val}}}")
+    return ("".join(parts), [c.hex() for c in controls], [j.hex() for j in junks])
+
+
+_PLACEHOLDER = re.compile(r"\{(Y|X)(\d+)\}")
+
+
+def rebuild(final: str, controls_hex: list[str], junks_hex: list[str]) -> bytes:
+    """Reconstruye bytes exactos desde traducción con placeholders."""
+    out = bytearray()
+    pos = 0
+    for m in _PLACEHOLDER.finditer(final):
+        out.extend(final[pos : m.start()].encode("cp932"))
+        idx = int(m.group(2))
+        table = controls_hex if m.group(1) == "Y" else junks_hex
+        if idx >= len(table):
+            raise YstbError(f"placeholder {{{m.group(1)}{idx}}} sin datos")
+        out.extend(bytes.fromhex(table[idx]))
+        pos = m.end()
+    out.extend(final[pos:].encode("cp932"))
+    return bytes(out)
+
+
 def is_jp(data: bytes) -> bool:
     return bool(data) and data[0] > 0x80 and decode(data) is not None
 
 
 def guess_ops(script: Script, msg_op: int = -1, call_op: int = -1) -> tuple[int, int]:
-    """msg: el op con args únicos japoneses (densidad 1.0 vale desde 1;
-    si hay ruido, >=3 y >=80%). call: >=1 firma "es...*"."""
+    """msg: conteo absoluto dominante (>=10, el op suele hacer doble función)
+    o densidad alta en ficheros pequeños. call: >=1 firma "es...*"."""
     from collections import Counter
 
     msgs, single, calls = Counter(), Counter(), Counter()
@@ -170,7 +285,7 @@ def guess_ops(script: Script, msg_op: int = -1, call_op: int = -1) -> tuple[int,
         cands = [
             (n, op)
             for op, n in msgs.items()
-            if (n >= 3 and n / single[op] >= 0.8) or n == single[op]
+            if n >= 10 or (n >= 3 and n / single[op] >= 0.8) or n == single[op]
         ]
         msg_op = max(cands)[1] if cands else -1
     if call_op < 0:
@@ -180,15 +295,30 @@ def guess_ops(script: Script, msg_op: int = -1, call_op: int = -1) -> tuple[int,
 
 def repack(script: Script, texts: list[str], msg_op: int, call_op: int, key: int) -> bytes:
     """Nuevos strings al tail de recursos + parcheo de offsets. Cualquier longitud."""
+    return _repack_blobs(script, [t.encode("cp932") for t in texts], False, msg_op, call_op, key)
+
+
+def repack_bytes(script: Script, raws: list[bytes], msg_op: int, call_op: int, key: int) -> bytes:
+    """Como repack pero con bytes ya construidos (controles inline preservados)."""
+    return _repack_blobs(script, raws, True, msg_op, call_op, key)
+
+
+def _repack_blobs(
+    script: Script, blobs: list[bytes], prebuilt: bool, msg_op: int, call_op: int, key: int
+) -> bytes:
     inst_cnt, code_size, arg_size, res_size, off_size = struct.unpack_from("<5I", script.header, 8)
     args_off = HEADER_SIZE + code_size
     args = bytearray(script.raw[args_off : args_off + arg_size])
     tail, new_off, ti, ai = bytearray(), res_size, 0, 0
 
-    def put(arg: Arg, text: str) -> None:
+    def put(arg: Arg, blob: bytes) -> None:
         nonlocal ti, new_off
-        raw = text.encode("cp932")
-        blob = struct.pack("<BH", arg.res_type, len(raw)) + raw if arg.type == 3 else raw
+        if not prebuilt:
+            raw = blob
+            blob = struct.pack("<BH", arg.res_type, len(raw)) + raw if arg.type == 3 else raw
+        elif arg.type == 3:
+            # arg.data ya es contenido puro (parse separa el header ResInfo).
+            blob = struct.pack("<BH", arg.res_type, len(blob)) + blob
         tail.extend(blob)
         struct.pack_into("<II", args, ai * 12 + 4, len(blob), new_off)
         new_off += len(blob)
@@ -198,7 +328,7 @@ def repack(script: Script, texts: list[str], msg_op: int, call_op: int, key: int
         fname = decode(inst.args[0].data) or "" if inst.args else ""
         for j, arg in enumerate(inst.args):
             if inst.op == msg_op and j == 0 and len(inst.args) == 1:
-                put(arg, texts[ti])
+                put(arg, blobs[ti])
             elif (
                 inst.op == call_op
                 and j > 0
@@ -206,10 +336,10 @@ def repack(script: Script, texts: list[str], msg_op: int, call_op: int, key: int
                 and fname in TEXT_FUNCS
                 and arg.data not in (b'""', b"''")
             ):
-                put(arg, texts[ti])
+                put(arg, blobs[ti])
             ai += 1
-    if ti != len(texts):
-        raise YstbError(f"texts mismatch: {len(texts)} given, {ti} slots")
+    if ti != len(blobs):
+        raise YstbError(f"texts mismatch: {len(blobs)} given, {ti} slots")
     hdr = bytearray(script.header)
     struct.pack_into("<I", hdr, 20, res_size + len(tail))  # ResourceSize
     out = bytes(hdr) + bytes(script.raw[HEADER_SIZE:args_off]) + bytes(args)

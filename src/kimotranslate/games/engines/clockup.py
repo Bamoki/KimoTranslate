@@ -78,8 +78,7 @@ def _find_nested_ypf(game_path: str) -> list[str]:
     """Archivos .ypf un nivel bajo raíz con magia YPF\x00 real. Acotado a
     subdirectorios directos para no recorrer ISOs/BGs gigantes."""
     try:
-        subs = [d for d in os.listdir(game_path)
-                if os.path.isdir(os.path.join(game_path, d))]
+        subs = [d for d in os.listdir(game_path) if os.path.isdir(os.path.join(game_path, d))]
     except OSError:
         return []
     found = []
@@ -186,33 +185,63 @@ def _classify(
     out, speaker, slot = [], "", 0
     scene = os.path.splitext(os.path.basename(relpath))[0]
 
-    def emit(source: str, ttype: str, translatable: bool, reason: str = "", spk: str = "") -> None:
+    def emit_raw(raw: bytes, ttype: str, reason: str = "", spk: str = "") -> None:
+        """Vía split_controls: controles inline -> {Y#}, binario -> {X#}."""
         nonlocal slot
         tid = f"{ENGINE}:{game_id}:{relpath}:msg:{slot}"
+        segments, ctls, junks = ystb.split_controls(raw)
+        template, ctls_hex, junks_hex = ystb.build_template(segments, ctls, junks)
+        if not template:
+            out.append(
+                ExtractedText(
+                    tid,
+                    game_id,
+                    relpath,
+                    "",
+                    ttype,
+                    spk or speaker,
+                    scene,
+                    slot,
+                    hashlib.sha1(raw).hexdigest()[:12],
+                    "cp932",
+                    False,
+                    (reason + " " if reason else "") + "binary",
+                    [],
+                    TextStatus.SKIPPED,
+                )
+            )
+            slot += 1
+            return
+        text_bytes = b"".join(b for k, b in segments if k == "t")
+        ok = ystb.is_jp(text_bytes)
         try:
-            digest = hashlib.sha1(source.encode("cp932")).hexdigest()[:12]
+            digest = hashlib.sha1(template.encode("cp932")).hexdigest()[:12]
         except UnicodeEncodeError:  # nunca silencioso: hash utf-8 + marca
-            digest = "u8-" + hashlib.sha1(source.encode("utf-8")).hexdigest()[:9]
+            digest = "u8-" + hashlib.sha1(template.encode("utf-8")).hexdigest()[:9]
             reason = (reason + " " if reason else "") + "non-cp932-source"
         out.append(
             ExtractedText(
                 tid,
                 game_id,
                 relpath,
-                source,
+                template,
                 ttype,
                 spk or speaker,
                 scene,
                 slot,
                 digest,
                 "cp932",
-                translatable,
-                reason,
-                find_tokens(source),
-                TextStatus.EXTRACTED if translatable else TextStatus.SKIPPED,
+                ok,
+                "" if ok else "non-jp",
+                find_tokens(template),
+                TextStatus.EXTRACTED if ok else TextStatus.SKIPPED,
+                metadata={"ctls": ctls_hex, "junks": junks_hex} if ctls or junks else {},
             )
         )
         slot += 1
+
+    def emit(source: str, ttype: str, translatable: bool, reason: str = "", spk: str = "") -> None:
+        emit_raw(source.encode("cp932", "replace"), ttype, reason, spk)
 
     for inst in script.insts:
         if inst.op == call_op and inst.args and inst.args[0].type == 3:
@@ -223,33 +252,12 @@ def _classify(
             elif fname in ystb.CHOICE_FUNCS:
                 for arg in inst.args[1:]:
                     if arg.type == 3 and arg.data not in (b'""', b"''"):
-                        s = ystb.decode(arg.data) or ""
-                        emit(
-                            s,
-                            TextType.CHOICE,
-                            bool(s) and ystb.is_jp(arg.data),
-                            "" if ystb.is_jp(arg.data) else "non-jp",
-                        )
+                        emit_raw(arg.data, TextType.CHOICE)
             elif fname in ystb.TEXT_FUNCS:
                 for arg in inst.args[1:]:
                     if arg.type == 3 and arg.data not in (b'""', b"''"):
-                        s = ystb.decode(arg.data) or ""
-                        emit(
-                            s,
-                            TextType.SYSTEM,
-                            bool(s) and ystb.is_jp(arg.data),
-                            "" if ystb.is_jp(arg.data) else "non-jp",
-                        )
+                        emit_raw(arg.data, TextType.SYSTEM)
             continue
         if inst.op == msg_op and len(inst.args) == 1:
-            s = ystb.decode(inst.args[0].data)
-            if s is None:
-                emit("", TextType.UNKNOWN, False, "undecodable")
-            else:
-                emit(
-                    s,
-                    TextType.DIALOGUE,
-                    ystb.is_jp(inst.args[0].data),
-                    "" if ystb.is_jp(inst.args[0].data) else "non-jp",
-                )
+            emit_raw(inst.args[0].data, TextType.DIALOGUE)
     return out

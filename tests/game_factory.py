@@ -43,6 +43,11 @@ def build_ystb(
         if it[0] == "msg":
             insts.append((msg_op, 1))
             raw_arg(it[1])
+        elif it[0] == "msg_raw":
+            # bytes crudos (p. ej. controles inline reales \x80+byte)
+            insts.append((msg_op, 1))
+            args.append((0, 0, len(it[1]), len(res)))
+            res.extend(it[1])
         elif it[0] == "call":
             _, func, tlist = it
             insts.append((call_op, 1 + len(tlist)))

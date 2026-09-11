@@ -84,24 +84,29 @@ def export_game(source_path: str, output_path: str, bundle: dict) -> dict:
         if _slot_count(script, msg_op, call_op) != len(ordered):
             failed.append({"file": relpath, "reason": "incomplete (slots != finals)"})
             continue
-        repack_texts, ok = [], True
+        repack_blobs, ok = [], True
         for t in ordered:
+            meta = t.get("metadata", {})
             try:
-                t["final"].encode("cp932")
+                blob = ystb.rebuild(t["final"], meta.get("ctls", []), meta.get("junks", []))
             except UnicodeEncodeError:
                 failed.append({"file": relpath, "id": t["id"], "reason": "unencodable-cp932"})
+                ok = False
+                break
+            except (ystb.YstbError, ValueError) as e:
+                failed.append({"file": relpath, "id": t["id"], "reason": f"rebuild: {e}"})
                 ok = False
                 break
             if not game_tokens.tokens_ok(t["source"], t["final"]):
                 failed.append({"file": relpath, "id": t["id"], "reason": "tokens-mismatch"})
                 ok = False
                 break
-            repack_texts.append(t["final"])
+            repack_blobs.append(blob)
         if not ok:
             continue
         # espejo del orden de extracción: slots msg/call en orden de parse
         try:
-            new_raw = ystb.repack(script, [t for t in repack_texts], msg_op, call_op, info["key"])
+            new_raw = ystb.repack_bytes(script, repack_blobs, msg_op, call_op, info["key"])
             ystb.parse(new_raw, info["key"])  # 7: verificar re-parse
         except (ystb.YstbError, UnicodeEncodeError, KeyError) as e:
             failed.append({"file": relpath, "reason": f"repack: {e}"})
