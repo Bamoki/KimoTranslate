@@ -52,12 +52,31 @@ class HubClient:
         """Solo si hay credenciales (modo seguro del Hub). En LAN abierta no hace nada."""
         if self._logged_in or not (self.admin_user and self.admin_pass):
             return
+        self.login(self.admin_user, self.admin_pass)
+
+    def hub_mode(self) -> dict:
+        """¿El Hub exige sesión? (open_mode = sin credenciales, no hace falta login)."""
+        try:
+            me = self._check(self._client.get("/api/auth/me"), "hub me")
+        except HubError as e:
+            raise HubError(f"hub unreachable: {e}") from e
+        return {"open_mode": bool(me.get("setup_required")), "logged_in": self._logged_in}
+
+    def login(self, username: str, password: str) -> dict:
+        """Sesión admin del Hub. La clave queda SOLO en memoria del proceso
+        (para re-login si la cookie expira); nunca en disco ni en logs."""
+        if not username or not password:
+            raise HubError("username and password required")
         res = self._client.post(
             f"{HUB_PREFIX}/../auth/login",
-            json={"username": self.admin_user, "password": self.admin_pass},
+            json={"username": username, "password": password},
         )
+        if res.status_code == 403:
+            return {"open_mode": True, "logged_in": False}
         self._check(res, "hub login")
+        self.admin_user, self.admin_pass = username, password
         self._logged_in = True
+        return {"open_mode": False, "logged_in": True, "username": username}
 
     # --- lectura (abierta) ---
     def health(self) -> dict:
@@ -70,46 +89,53 @@ class HubClient:
         data = self._check(self._client.get(f"{HUB_PREFIX}/jobs"), "list jobs")
         return [j for j in data.get("jobs", []) if j.get("domain") == DOMAIN]
 
+    def _admin_write(self, op: str, method: str, path: str, payload: dict) -> dict:
+        """POST con re-login único si la cookie expiró (401)."""
+        self._ensure_admin()
+        res = self._client.post(path, json=payload) if method == "POST" else None
+        assert res is not None
+        if res.status_code == 401 and (self.admin_user and self.admin_pass):
+            self._logged_in = False
+            self.login(self.admin_user, self.admin_pass)
+            res = self._client.post(path, json=payload)
+        return self._check(res, op)
+
     # --- escritura admin (sesión del Hub si modo seguro) ---
     def ensure_dataset(self) -> dict:
         data = self._check(self._client.get(f"{HUB_PREFIX}/datasets"), "list datasets")
         if any(d.get("id") == DATASET_ID for d in data.get("datasets", [])):
             return {"id": DATASET_ID, "exists": True}
-        self._ensure_admin()
-        return self._check(
-            self._client.post(
-                f"{HUB_PREFIX}/datasets",
-                json={
-                    "id": DATASET_ID,
-                    "name": "KimoTranslate translations",
-                    "domain": DOMAIN,
-                    "path": "kimo-translations.jsonl",
-                },
-            ),
+        return self._admin_write(
             "create dataset",
+            "POST",
+            f"{HUB_PREFIX}/datasets",
+            {
+                "id": DATASET_ID,
+                "name": "KimoTranslate translations",
+                "domain": DOMAIN,
+                "path": "kimo-translations.jsonl",
+            },
         )
 
     def create_job(
         self, job_id: str, name: str, domain: str, metrics: dict, base_model: str = "kimo"
     ) -> dict:
         self.ensure_dataset()
-        self._ensure_admin()
-        return self._check(
-            self._client.post(
-                f"{HUB_PREFIX}/jobs",
-                json={
-                    "id": job_id,
-                    "name": name,
-                    "domain": domain,
-                    "dataset_id": DATASET_ID,
-                    "base_model": base_model,
-                    "method": "custom",
-                    "device": "remote",
-                    "mode": "real_training",
-                    "metrics": metrics,
-                },
-            ),
+        return self._admin_write(
             "create job",
+            "POST",
+            f"{HUB_PREFIX}/jobs",
+            {
+                "id": job_id,
+                "name": name,
+                "domain": domain,
+                "dataset_id": DATASET_ID,
+                "base_model": base_model,
+                "method": "custom",
+                "device": "remote",
+                "mode": "real_training",
+                "metrics": metrics,
+            },
         )
 
     def create_translation_job(

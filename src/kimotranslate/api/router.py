@@ -1022,3 +1022,25 @@ def release_manifest() -> dict:
     return build_manifest(
         {"datasets": [d["dataset_id"] + "@v" + str(d["version"]) for d in datasets.list_datasets()]}
     )
+
+
+@router.get("/hub/status")
+def hub_status() -> dict:
+    assert hub is not None
+    try:
+        mode = hub.hub_mode()
+    except HubError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"hub_url": hub.base_url, **mode}
+
+
+@router.post("/hub/login")
+def hub_login(body: dict) -> dict:
+    """Guarda sesión admin del Hub en memoria (para modo seguro).
+    La clave no se persiste ni se registra; solo vive en el proceso."""
+    assert hub is not None
+    try:
+        result = hub.login((body.get("username") or "").strip(), body.get("password") or "")
+    except HubError as e:
+        raise HTTPException(401, "hub rejected credentials") from e
+    return {"hub_url": hub.base_url, **result}

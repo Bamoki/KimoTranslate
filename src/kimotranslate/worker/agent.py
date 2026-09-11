@@ -257,7 +257,7 @@ class KimoWorker:
 
     def _candidates(self, request: TranslationRequest, ctx) -> list:
         try:
-            return self.kimo.memory_search(
+            res = self.kimo.memory_search(
                 query=request.source_text,
                 domain=ctx.domain or "game_translation",
                 content_type=ctx.content_type,
@@ -265,6 +265,7 @@ class KimoWorker:
                 game_id=ctx.game_id,
                 limit=3,
             )
+            return res if isinstance(res, list) else []
         except Exception:  # noqa: BLE001
             return []
 

@@ -139,6 +139,12 @@ class Api:
     def editor_reset(self, game_id: str, image_id: str, body: dict):
         return self._call("POST", f"/games/{game_id}/images/{image_id}/reset", body)
 
+    def hub_status(self):
+        return self._call("GET", "/hub/status")
+
+    def hub_login(self, username: str, password: str):
+        return self._call("POST", "/hub/login", {"username": username, "password": password})
+
     def save_correction(self, body: dict):
         return self._call("POST", "/corrections", body)
 
@@ -650,6 +656,19 @@ class App(tk.Tk):
         self.server_entry = ttk.Entry(f, width=50)
         self.server_entry.pack(anchor="w")
         self.server_entry.insert(0, self.api.base)
+        ttk.Label(f, text="Hub admin (solo si el Hub pide sesión):").pack(anchor="w")
+        row = ttk.Frame(f)
+        row.pack(anchor="w")
+        ttk.Label(row, text="Usuario:").pack(side="left")
+        self.hub_user = ttk.Entry(row, width=16)
+        self.hub_user.pack(side="left")
+        self.hub_user.insert(0, self.cfg.get("hub_user", ""))
+        ttk.Label(row, text="Clave:").pack(side="left")
+        self.hub_pass = ttk.Entry(row, width=16, show="•")
+        self.hub_pass.pack(side="left")
+        ttk.Button(row, text="Conectar", command=self._hub_connect).pack(side="left")
+        self.hub_status = ttk.Label(f, text="")
+        self.hub_status.pack(anchor="w")
         self.auto_update = tk.BooleanVar(value=bool(self.cfg.get("auto_update", True)))
         ttk.Checkbutton(
             f, text="Buscar actualizaciones automáticamente", variable=self.auto_update
@@ -660,6 +679,35 @@ class App(tk.Tk):
         )
         self.settings_status = ttk.Label(f, text="")
         self.settings_status.pack(anchor="w")
+        self._hub_refresh_status()
+
+    def _hub_refresh_status(self) -> None:
+        try:
+            st = self.api.hub_status()
+            if st.get("open_mode"):
+                self.hub_status.config(text="Hub: modo abierto (sin sesión)")
+            elif st.get("logged_in"):
+                self.hub_status.config(text="Hub: sesión activa")
+            else:
+                self.hub_status.config(text="Hub: requiere sesión (pon usuario/clave)")
+        except Exception as e:
+            self.hub_status.config(text=f"Hub: {e}")
+
+    def _hub_connect(self) -> None:
+        try:
+            res = self.api.hub_login(self.hub_user.get().strip(), self.hub_pass.get())
+            self.hub_pass.delete(0, "end")  # la clave no se queda en la GUI
+            if res.get("open_mode"):
+                self.hub_status.config(text="Hub: modo abierto (no hacía falta)")
+            else:
+                self.hub_status.config(text=f"Hub: sesión activa ({res.get('username')})")
+            self.cfg["hub_user"] = self.hub_user.get().strip()
+            try:
+                self._cfg_mod.save(self.cfg)
+            except OSError:
+                pass
+        except Exception as e:
+            self.hub_status.config(text=f"Hub: {e}")
 
     def _save_settings(self) -> None:
         url = self.server_entry.get().strip().rstrip("/")

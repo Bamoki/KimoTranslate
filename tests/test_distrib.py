@@ -166,3 +166,70 @@ def test_updater_aborts_on_bad_checksum(tmp_path):
     assert rc != 0
     assert current.read_bytes() == b"OLD-VERSION"  # intacta
     assert not (tmp_path / "KimoTranslate.exe.bak").exists()  # ni backup hizo falta
+
+
+def test_hub_status_open_mode(client):
+    st = client.get("/hub/status").json()
+    assert st["open_mode"] is True and "hub_url" in st
+
+
+def test_hub_login_open_mode(client):
+    # En modo abierto no hace falta login: lo dice sin pedir clave.
+    assert (
+        client.post("/hub/login", json={"username": "x", "password": "y"}).json()["open_mode"]
+        is True
+    )
+
+
+def test_hub_login_rejected():
+    import httpx
+
+    from kimotranslate.hub.client import HubClient, HubError
+
+    def handler(request):
+        if request.url.path.endswith("/auth/login"):
+            return httpx.Response(401, json={"detail": "no"})
+        return httpx.Response(200, json={})
+
+    cli = HubClient(
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://hub")
+    )
+    try:
+        cli.login("admin", "wrong")
+        raise AssertionError("must fail")
+    except HubError:
+        pass
+    with __import__("pytest").raises(HubError):
+        client_post_login_empty(cli)
+
+
+def client_post_login_empty(cli):
+    return cli.login("", "")
+
+
+def test_admin_write_retries_login_once():
+    import httpx
+
+    from kimotranslate.hub.client import HubClient
+
+    state = {"posts": 0}
+
+    def handler(request):
+        if request.url.path.endswith("/auth/login"):
+            return httpx.Response(200, json={"authenticated": True})
+        if request.url.path.endswith("/datasets") and request.method == "GET":
+            return httpx.Response(200, json={"datasets": []})
+        if request.url.path.endswith("/datasets"):
+            state["posts"] += 1
+            if state["posts"] == 1:
+                return httpx.Response(401, json={"detail": "expired"})
+            return httpx.Response(200, json={"id": "kimo-translations"})
+        return httpx.Response(200, json={})
+
+    cli = HubClient(
+        admin_user="a",
+        admin_pass="b",
+        client=httpx.Client(transport=httpx.MockTransport(handler), base_url="http://hub"),
+    )
+    assert cli.ensure_dataset()["id"] == "kimo-translations"
+    assert state["posts"] == 2

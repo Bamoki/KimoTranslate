@@ -53,10 +53,12 @@ def hub_server(tmp_path_factory):
     _auth_store.reset_state()
     from backend.app.api.health import router as hub_health_router
     from backend.app.api.training import router as hub_router
+    from backend.app.auth.router import router as hub_auth_router
     from backend.app.core.config import get_settings
 
     get_settings.cache_clear()
     app = FastAPI()
+    app.include_router(hub_auth_router)
     app.include_router(hub_health_router)
     app.include_router(hub_router)
     server = uvicorn.Server(
