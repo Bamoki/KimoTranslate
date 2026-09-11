@@ -175,8 +175,10 @@ class GameDetailView(ctk.CTkFrame):
         )
 
     def _integrity(self) -> None:
+        import os
+        out = os.path.join(os.path.expanduser("~"), "KimoTranslate", self.game_id + "_integrity")
         self.app.run_async(
-            lambda: self.app.api.game_integrity(self.game_id),
+            lambda: self.app.api.game_integrity(self.game_id, out),
             on_done=lambda r: self.app.toast(
                 "Integridad OK" if r.get("ok") else "Integridad FALLO", error=not r.get("ok")
             ),

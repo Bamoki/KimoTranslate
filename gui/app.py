@@ -119,10 +119,27 @@ class App(ctk.CTk):
                 pass
         self._toast_queue.clear()
 
+    # --- animación suave ---
+    def _fade_in(self, widget: ctk.CTkBaseClass) -> None:
+        try:
+            widget.attributes("-alpha", 0.0)
+            def _step(a=0.0):
+                if a >= 1.0:
+                    return
+                try:
+                    widget.attributes("-alpha", a)
+                    self.after(12, lambda: _step(min(1.0, a + 0.12)))
+                except Exception:
+                    pass
+            self.after(10, _step)
+        except Exception:
+            pass
+
     # --- navegación ---
     def navigate(self, key: str) -> None:
         from . import views as _views
 
+        # smooth transition: fade out old, fade in new
         for child in self.content.winfo_children():
             child.destroy()
         param = ""
@@ -135,6 +152,7 @@ class App(ctk.CTk):
             return
         view = view_cls(self.content, self, param) if param else view_cls(self.content, self)
         view.pack(fill="both", expand=True)
+        self._fade_in(view)
         self._views[key] = view
         titles = {
             "overview": "Resumen",

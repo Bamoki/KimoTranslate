@@ -1,16 +1,17 @@
 """Sidebar + Topbar + barra de estado."""
 
 import customtkinter as ctk
+from .dialogs import ToolTip
 
 NAV = [
-    ("overview", "Resumen", None),
-    ("games", "Juegos", "TRABAJO"),
-    ("translate", "Traducir", None),
-    ("images", "Imágenes", None),
-    ("review", "Revisar", None),
-    ("datasets", "Datasets", None),
-    ("jobs", "Tareas", "SISTEMA"),
-    ("settings", "Ajustes", None),
+    ("overview", "Resumen", "Vista general del estado", None),
+    ("games", "Juegos", "Gestión de juegos detectados", "TRABAJO"),
+    ("translate", "Traducir", "Traducción por lotes con MAGI/Ollama", None),
+    ("images", "Imágenes", "OCR y localización de recursos gráficos", None),
+    ("review", "Revisar", "Corrección y validación humana", None),
+    ("datasets", "Datasets", "Construcción de datasets para entrenamiento", None),
+    ("jobs", "Tareas", "Cola de trabajos y reintentos", "SISTEMA"),
+    ("settings", "Ajustes", "Configuración, conexión y sesión Hub", None),
 ]
 
 _MARKERS = {
@@ -34,7 +35,7 @@ class Sidebar(ctk.CTkFrame):
         ctk.CTkLabel(
             self, text="KIMO TRANSLATE", font=("Segoe UI", 13, "bold"), text_color=theme.get("text")
         ).pack(padx=12, pady=(16, 4), anchor="w")
-        for key, label, section in NAV:
+        for key, label, tooltip, section in NAV:
             if section:
                 ctk.CTkLabel(
                     self, text=section, font=("Segoe UI", 9), text_color=theme.get("text_muted")
@@ -51,6 +52,7 @@ class Sidebar(ctk.CTkFrame):
                 command=lambda k=key: self._on_navigate(k),
             )
             btn.pack(fill="x", padx=8, pady=2)
+            ToolTip(btn, tooltip)
             self._buttons[key] = btn
         self._current = ""
 

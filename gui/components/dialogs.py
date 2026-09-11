@@ -1,6 +1,7 @@
-"""Cards, empty states, diálogos de error con detalles."""
+"""Cards, empty states, diálogos de error con detalles + tooltips."""
 
 import customtkinter as ctk
+import tkinter as tk
 
 
 class Card(ctk.CTkFrame):
@@ -93,3 +94,48 @@ def ask_confirm(master, theme, title: str, message: str) -> bool:
     box.grab_set()
     master.wait_window(box)
     return result["ok"]
+
+
+class ToolTip:
+    """Tooltip simple que aparece tras 400ms al hacer hover."""
+
+    def __init__(self, widget: tk.Widget, text: str) -> None:
+        self.widget = widget
+        self.text = text
+        self.tip: ctk.CTkToplevel | None = None
+        self._after_id = ""
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _show(self, event=None) -> None:
+        if self._after_id:
+            return
+        self._after_id = self.widget.after(400, self._create)
+
+    def _create(self) -> None:
+        try:
+            x = self.widget.winfo_rootx() + self.widget.winfo_width() // 2
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+            self.tip = ctk.CTkToplevel(self.widget)
+            self.tip.overrideredirect(True)
+            self.tip.attributes("-topmost", True)
+            lbl = ctk.CTkLabel(
+                self.tip, text=self.text, font=("Segoe UI", 10), text_color="#C0CAF5",
+                fg_color="#24283B", corner_radius=6, padx=8, pady=4
+            )
+            lbl.pack()
+            self.tip.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+    def _hide(self, event=None) -> None:
+        if self._after_id:
+            self.widget.after_cancel(self._after_id)
+            self._after_id = ""
+        if self.tip:
+            try:
+                self.tip.destroy()
+            except Exception:
+                pass
+            self.tip = None
