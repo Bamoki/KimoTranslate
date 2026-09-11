@@ -38,6 +38,13 @@ def detect(game_path: str) -> DetectionResult:
     elif ypfs:
         evidence.append(f"ypf:{ypfs[0]}")
         hits += 1
+    else:
+        # Variante real (Natsu no Kusari et al.): .ypf solo dentro de pac/.
+        # Escaneo acotado (1 nivel) con magia YPF verificada, no por nombre.
+        nested = _find_nested_ypf(game_path)
+        if nested:
+            evidence.append(f"ypf:{nested[0]}")
+            hits += 2
     if "pac" in lower:
         evidence.append("pac/")
         hits += 1
@@ -65,6 +72,33 @@ def detect(game_path: str) -> DetectionResult:
     if hits >= 2:
         return DetectionResult(ENGINE, 0.6, version="yuris?", evidence=tuple(evidence))
     return DetectionResult("unknown", 0.0, evidence=tuple(evidence or ("no-evidence",)))
+
+
+def _find_nested_ypf(game_path: str) -> list[str]:
+    """Archivos .ypf un nivel bajo raíz con magia YPF\x00 real. Acotado a
+    subdirectorios directos para no recorrer ISOs/BGs gigantes."""
+    try:
+        subs = [d for d in os.listdir(game_path)
+                if os.path.isdir(os.path.join(game_path, d))]
+    except OSError:
+        return []
+    found = []
+    for sub in sorted(subs):
+        try:
+            files = os.listdir(os.path.join(game_path, sub))
+        except OSError:
+            continue
+        for f in sorted(files):
+            if not f.lower().endswith(".ypf"):
+                continue
+            p = os.path.join(game_path, sub, f)
+            try:
+                with open(p, "rb") as fh:
+                    if fh.read(4) == ypf.MAGIC:
+                        found.append(os.path.join(sub, f))
+            except OSError:
+                continue
+    return found
 
 
 def _iter_ybn(game_path: str) -> list[tuple[str, bytes]]:

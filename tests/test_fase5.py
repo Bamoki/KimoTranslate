@@ -52,6 +52,13 @@ def game_c(tmp_path):
     return make_game(str(tmp_path), "game_c", {"yst00001.ybn": DLG_A}, KEY_A, packed=True)
 
 
+@pytest.fixture()
+def game_nested(tmp_path):
+    # Variante real Natsu no Kusari: .ypf solo en pac/, sin exe ni sueltos.
+    return make_game(str(tmp_path), "game_n", {"yst00001.ybn": DLG_A}, KEY_A,
+                     pac_split=True)
+
+
 # --- detection ---
 
 
@@ -64,6 +71,12 @@ def test_detect_clockup_loose(game_a):
 def test_detect_clockup_packed(game_c):
     det = clockup.detect(game_c)
     assert det.engine == "clockup" and det.confidence >= 0.6
+
+
+def test_detect_nested_pac_variant(game_nested):
+    det = clockup.detect(game_nested)
+    assert det.engine == "clockup" and det.confidence >= 0.6
+    assert any(e.startswith("ypf:pac/") for e in det.evidence)
 
 
 def test_detect_unknown(tmp_path):

@@ -191,7 +191,12 @@ DLG_B = [
 
 
 def make_game(
-    root: str, name: str, scripts: dict[str, list], key: int = KEY_A, packed: bool = False
+    root: str,
+    name: str,
+    scripts: dict[str, list],
+    key: int = KEY_A,
+    packed: bool = False,
+    pac_split: bool = False,
 ) -> str:
     """Crea un juego sintético. Devuelve el path del juego."""
     gdir = os.path.join(root, name)
@@ -205,6 +210,16 @@ def make_game(
         pac = os.path.join(gdir, "pac")
         os.makedirs(pac, exist_ok=True)
         with open(os.path.join(pac, "ysbin.ypf"), "wb") as f:
+            f.write(build_ypf(built))
+    if pac_split:
+        # Variante real (Natsu no Kusari): sin exe ni sueltos, .ypf solo en pac/.
+        import shutil
+
+        shutil.rmtree(ysbin)
+        os.remove(os.path.join(gdir, "yu-ris.exe"))
+        pac = os.path.join(gdir, "pac")
+        os.makedirs(pac, exist_ok=True)
+        with open(os.path.join(pac, "bn.ypf"), "wb") as f:
             f.write(build_ypf(built))
     else:
         for arcname, blob in built.items():
