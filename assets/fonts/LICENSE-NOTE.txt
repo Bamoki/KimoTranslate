@@ -1,0 +1,5 @@
+DejaVu Sans (https://dejavu-fonts.github.io/) para renderizar español.
+Licencia: Bitstream Vera / Arev — libre para este uso.
+Archivos: DejaVuSans.ttf, DejaVuSans-Bold.ttf (subset latin vía fontsource CDN).
+Override en producción: KIMOTRANSLATE_FONT_PATH=/ruta/a/fuente.ttf
+(una fuente CJK para texto vertical japonés, p. ej. Noto Sans CJK).
