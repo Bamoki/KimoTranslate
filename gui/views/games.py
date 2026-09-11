@@ -3,7 +3,7 @@
 import customtkinter as ctk
 
 from ..client import friendly_message
-from ..components.badges import ProgressBar, StatusBadge
+from ..components.badges import ProgressBar, StatusBadge, progress_counts
 from ..components.dialogs import EmptyState, ErrorDialog
 
 
@@ -30,8 +30,7 @@ class GameCard(ctk.CTkFrame):
             top, theme, "READY" if game.get("detected_engine") != "unknown" else "WARNING"
         ).pack(side="right")
         counts = game.get("counts") or {}
-        total = counts.get("total", 0)
-        done = total - counts.get("EXTRACTED", 0) - counts.get("QUEUED", 0)
+        done, total = progress_counts(counts)
         info = (
             f"{game.get('detected_engine', '?')} · {game.get('source_lang', 'ja')}→"
             f"{game.get('target_lang', 'es')}"
@@ -48,32 +47,61 @@ class GameCard(ctk.CTkFrame):
         # Acción primaria con peso; secundarias sutiles.
         ctk.CTkButton(
             row,
-            text="Open",
+            text="Abrir",
             width=90,
             fg_color=theme.get("accent"),
             hover_color=theme.get("accent_hover"),
             command=lambda: app.navigate("game_detail:" + gid),
         ).pack(side="left", padx=4)
-        for label, fn in (
-            ("Extract", lambda: self._extract(gid)),
-            ("Translate", lambda: self._translate(gid)),
-        ):
-            ctk.CTkButton(
-                row,
-                text=label,
-                width=90,
-                fg_color="transparent",
-                border_width=1,
-                text_color=theme.get("text"),
-                command=fn,
-            ).pack(side="left", padx=4)
+        self._extract_btn = ctk.CTkButton(
+            row,
+            text="Extraer",
+            width=90,
+            fg_color="transparent",
+            border_width=1,
+            text_color=theme.get("text"),
+            command=lambda: self._extract(gid),
+        )
+        self._extract_btn.pack(side="left", padx=4)
+        self._translate_btn = ctk.CTkButton(
+            row,
+            text="Traducir",
+            width=90,
+            fg_color="transparent",
+            border_width=1,
+            text_color=theme.get("text"),
+            command=lambda: self._translate(gid),
+        )
+        self._translate_btn.pack(side="left", padx=4)
+
+    def _set_busy(self, busy: bool) -> None:
+        import tkinter as _tk
+
+        try:
+            if not self.winfo_exists():
+                return
+            state = "disabled" if busy else "normal"
+            self._extract_btn.configure(state=state)
+            self._translate_btn.configure(state=state)
+        except _tk.TclError:
+            pass  # tarjeta destruida al navegar antes de terminar
 
     def _extract(self, gid: str) -> None:
+        self._set_busy(True)
         self.app.run_async(
             lambda: self.app.api.extract_game(gid),
-            on_done=lambda r: self.app.toast(f"Extract: {r}"),
-            on_error=lambda e: self._err("Extract", e),
-            status=f"Extract {gid}…",
+            on_done=lambda r: (self._set_busy(False), self.app.toast(f"Extracción: {r}")),
+            on_error=lambda e: (self._set_busy(False), self._err("Extraer", e)),
+            status=f"Extrayendo {gid}…",
+        )
+
+    def _translate(self, gid: str) -> None:
+        self._set_busy(True)
+        self.app.run_async(
+            lambda: self.app.api.translate_game(gid),
+            on_done=lambda r: (self._set_busy(False), self.app.toast(f"Traducción: {r}")),
+            on_error=lambda e: (self._set_busy(False), self._err("Traducir", e)),
+            status=f"Traduciendo {gid}…",
         )
 
     def _translate(self, gid: str) -> None:
@@ -97,11 +125,11 @@ class GamesView(ctk.CTkScrollableFrame):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", pady=(0, 8))
         ctk.CTkLabel(
-            head, text="Games", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            head, text="Juegos", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(side="left")
         ctk.CTkButton(
             head,
-            text="+ Add game",
+            text="+ Añadir juego",
             width=110,
             fg_color=theme.get("accent"),
             command=self._add_dialog,
@@ -119,9 +147,9 @@ class GamesView(ctk.CTkScrollableFrame):
             EmptyState(
                 self._list,
                 self.app.theme,
-                "No games found",
-                "Add a game directory to begin.",
-                "Add game directory",
+                "Sin juegos",
+                "Añade un directorio de juego para empezar.",
+                "Añadir juego",
                 self._add_dialog,
             ).pack(fill="x")
             return
@@ -134,13 +162,15 @@ class GamesView(ctk.CTkScrollableFrame):
 
     def _add_dialog(self) -> None:
         win = ctk.CTkToplevel(self)
-        win.title("Add game")
+        win.title("Añadir juego")
         win.geometry("460x180")
+        win.transient(self.winfo_toplevel())
         ctk.CTkLabel(win, text="Carpeta del juego (en el Worker):").pack(
             padx=16, pady=(12, 2), anchor="w"
         )
         entry = ctk.CTkEntry(win, width=400)
         entry.pack(padx=16)
+        entry.focus_set()
         try:
             import os
 
@@ -152,7 +182,7 @@ class GamesView(ctk.CTkScrollableFrame):
         except OSError:
             pass
 
-        def _go():
+        def _go(event=None):
             path = entry.get().strip()
             if not path:
                 return
@@ -164,4 +194,6 @@ class GamesView(ctk.CTkScrollableFrame):
                 status="Detectando juego…",
             )
 
-        ctk.CTkButton(win, text="Detect", command=_go).pack(pady=12)
+        entry.bind("<Return>", _go)
+        ctk.CTkButton(win, text="Detectar", command=_go).pack(pady=12)
+        win.grab_set()

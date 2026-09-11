@@ -9,29 +9,54 @@ class SettingsView(ctk.CTkScrollableFrame):
         self.app = app
         theme = app.theme
         ctk.CTkLabel(
-            self, text="Settings", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            self, text="Ajustes", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(anchor="w", padx=8)
         self._entries: dict[str, ctk.CTkEntry] = {}
         self._combos: dict[str, ctk.CTkComboBox] = {}
         self._switches: dict[str, ctk.CTkVariable] = {}
         cfg = app.cfg
         self._section("GENERAL")
-        self._combo("appearance", "Appearance", ["dark", "light"], cfg.get("appearance", "dark"))
-        self._entry("game_roots", "Game roots (; separados)", ";".join(cfg.get("game_roots", [])))
-        self._section("CONNECTION")
-        self._entry("server_url", "Raspberry-Hub URL", cfg.get("server_url", ""))
-        self._entry("hub_user", "Hub admin user", cfg.get("hub_user", ""))
-        self._section("TRANSLATION")
+        self._combo("appearance", "Apariencia", ["dark", "light"], cfg.get("appearance", "dark"))
+        self._entry("game_roots", "Raíces de juegos (; separadas)", ";".join(cfg.get("game_roots", [])))
+        self._section("CONEXIÓN")
+        self._entry("server_url", "URL de Raspberry-Hub", cfg.get("server_url", ""))
+        self._section("SESIÓN ADMIN DEL HUB")
+        self._entry("hub_user", "Usuario admin", cfg.get("hub_user", ""))
+        self._hub_pass = ctk.CTkEntry(self, width=420, show="•")
+        ctk.CTkLabel(self, text="Clave (no se guarda, solo memoria)", font=("Segoe UI", 11)).pack(
+            anchor="w", padx=8
+        )
+        self._hub_pass.pack(anchor="w", padx=8, pady=(0, 4))
+        hub_row = ctk.CTkFrame(self, fg_color="transparent")
+        hub_row.pack(anchor="w", padx=8, pady=(0, 4))
+        ctk.CTkButton(
+            hub_row, text="Iniciar sesión", width=130, command=self._hub_login
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            hub_row,
+            text="Actualizar estado",
+            width=130,
+            fg_color="transparent",
+            border_width=1,
+            command=self._hub_refresh,
+        ).pack(side="left")
+        self._hub_state = ctk.CTkLabel(
+            self, text="Estado: sin comprobar", font=("Segoe UI", 11),
+            text_color=theme.get("text_secondary"),
+        )
+        self._hub_state.pack(anchor="w", padx=8, pady=(0, 4))
+        self._hub_refresh()
+        self._section("TRADUCCIÓN")
         self._combo(
             "default_provider",
-            "Default provider",
+            "Proveedor por defecto",
             ["magi", "ollama", "deepl", "google"],
             cfg.get("default_provider", "magi"),
         )
-        self._entry("default_model", "Default model", cfg.get("default_model", ""))
+        self._entry("default_model", "Modelo por defecto", cfg.get("default_model", ""))
         self._section("OCR")
-        self._combo("ocr_engine", "Engine", ["mock", "tradujap"], cfg.get("ocr_engine", "mock"))
-        self._section("PROVIDERS")
+        self._combo("ocr_engine", "Motor", ["mock", "tradujap"], cfg.get("ocr_engine", "mock"))
+        self._section("PROVEEDORES")
         import os
 
         for key, label in (("DEEPL_API_KEY", "DeepL"), ("GOOGLE_TRANSLATE_API_KEY", "Google")):
@@ -48,13 +73,13 @@ class SettingsView(ctk.CTkScrollableFrame):
             font=("Segoe UI", 10),
             text_color=theme.get("text_muted"),
         ).pack(anchor="w", padx=8, pady=(0, 8))
-        self._section("UPDATES")
+        self._section("ACTUALIZACIONES")
         self._switch(
             "auto_update",
             "Buscar actualizaciones automáticamente",
             bool(cfg.get("auto_update", True)),
         )
-        ctk.CTkButton(self, text="Save", fg_color=theme.get("accent"), command=self._save).pack(
+        ctk.CTkButton(self, text="Guardar", fg_color=theme.get("accent"), command=self._save).pack(
             anchor="w", padx=8, pady=8
         )
         ctk.CTkButton(
@@ -115,3 +140,52 @@ class SettingsView(ctk.CTkScrollableFrame):
             self._status.configure(text="Guardado. Reinicia para tema completo.")
         except OSError as e:
             self._status.configure(text=f"error: {e}")
+
+    # --- sesión admin del Hub (la clave nunca se guarda en disco) ---
+    def _hub_refresh(self) -> None:
+        self._hub_state.configure(text="Estado: comprobando…")
+        self.app.run_async(
+            self.app.api.hub_status, on_done=self._hub_show, on_error=self._hub_fail
+        )
+
+    def _hub_show(self, st: dict) -> None:
+        if st.get("open_mode"):
+            self._hub_state.configure(text="Estado: modo abierto (sin sesión)")
+        elif st.get("logged_in"):
+            self._hub_state.configure(text="Estado: sesión activa")
+        else:
+            self._hub_state.configure(text="Estado: requiere sesión (usuario + clave)")
+
+    def _hub_fail(self, e: Exception) -> None:
+        from ..client import friendly_message
+
+        msg, _ = friendly_message("Estado del Hub", e)
+        self._hub_state.configure(text=f"Estado: {msg}")
+
+    def _hub_login(self) -> None:
+        user = self._entries["hub_user"].get().strip()
+        pwd = self._hub_pass.get()
+        if not user or not pwd:
+            self._hub_state.configure(text="Estado: indica usuario y clave")
+            return
+        self._hub_state.configure(text="Estado: conectando…")
+
+        def _done(res: dict) -> None:
+            self._hub_pass.delete(0, "end")  # la clave no permanece ni en el widget
+            if res.get("open_mode"):
+                self._hub_state.configure(text="Estado: modo abierto (no hacía falta)")
+                return
+            self._hub_state.configure(text=f"Estado: sesión activa ({res.get('username', user)})")
+            self.app.cfg["hub_user"] = user
+            try:
+                self.app.cfg_mod.save(self.app.cfg)
+            except OSError:
+                pass
+
+        def _fail(e: Exception) -> None:
+            from ..client import friendly_message
+
+            msg, _ = friendly_message("Iniciar sesión", e)
+            self._hub_state.configure(text=f"Estado: {msg}")
+
+        self.app.run_async(lambda: self.app.api.hub_login(user, pwd), on_done=_done, on_error=_fail)

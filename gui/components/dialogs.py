@@ -58,7 +58,7 @@ class ErrorDialog(ctk.CTkToplevel):
         row.pack(pady=12)
         if details:
             ctk.CTkButton(
-                row, text="View details", command=lambda: self._show_details(details)
+                row, text="Ver detalles", command=lambda: self._show_details(details)
             ).pack(side="left", padx=6)
         ctk.CTkButton(row, text="Cerrar", command=self.destroy).pack(side="left", padx=6)
         self.grab_set()

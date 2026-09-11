@@ -140,16 +140,16 @@ def test_navigation_registry():
 def test_sidebar_sections():
     src = open("gui/components/shell.py", encoding="utf-8").read()
     for label in (
-        "Overview",
-        "WORKSPACE",
-        "Games",
-        "Translate",
-        "Images",
-        "Review",
+        "Resumen",
+        "TRABAJO",
+        "Juegos",
+        "Traducir",
+        "Imágenes",
+        "Revisar",
         "Datasets",
-        "SYSTEM",
-        "Jobs",
-        "Settings",
+        "SISTEMA",
+        "Tareas",
+        "Ajustes",
     ):
         assert label in src, label
 

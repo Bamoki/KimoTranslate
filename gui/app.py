@@ -4,6 +4,7 @@ Operaciones largas en hilos (la GUI nunca se congela); el worker remoto
 sigue en el Hub. Sin modelos en la GUI.
 """
 
+import json
 import queue
 import threading
 
@@ -34,16 +35,20 @@ class App(ctk.CTk):
         self.theme = Theme(self.cfg.get("appearance", "dark"))
         ctk.set_appearance_mode(self.theme.ctk_mode())
         self.title(f"KimoTranslate {version}")
-        self.geometry("1280x800")
         self.minsize(900, 600)
+        self._restore_geometry()
         self._tasks: queue.Queue = queue.Queue()
         self._views: dict = {}
         self._current = ""
+        self._toast_queue: list = []  # cola de toasts (max 3)
+        self._health_failures = 0     # backoff counter
         self._build()
+        self._bind_shortcuts()
         self.after(100, self._pump)
         self.after(1500, self._poll_health)
         self.after(2500, self._auto_update_check)
         self.navigate("overview")
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # --- layout ---
     def _build(self) -> None:
@@ -57,6 +62,62 @@ class App(ctk.CTk):
         self.content.pack(side="left", fill="both", expand=True, padx=12, pady=12)
         self.statusbar = Statusbar(self, self.theme)
         self.statusbar.pack(fill="x")
+
+    # --- geometría ventana ---
+    def _restore_geometry(self) -> None:
+        geom = self.cfg.get("window_geometry", "")
+        maxed = self.cfg.get("window_maximized", False)
+        if geom:
+            try:
+                self.geometry(geom)
+            except Exception:
+                self.geometry("1280x800")
+        else:
+            self.geometry("1280x800")
+        if maxed:
+            self.after(100, lambda: self.state("zoomed"))
+        self.bind("<Configure>", self._on_configure, add="+")
+
+    def _on_configure(self, event) -> None:
+        if event.widget is self and event.width > 100 and event.height > 100:
+            if self.state() != "zoomed":
+                self.cfg["window_geometry"] = self.geometry()
+                self.cfg["window_maximized"] = False
+            else:
+                self.cfg["window_maximized"] = True
+
+    def _on_close(self) -> None:
+        try:
+            if self.state() != "zoomed":
+                self.cfg["window_geometry"] = self.geometry()
+            self.cfg["window_maximized"] = (self.state() == "zoomed")
+            self.cfg_mod.save(self.cfg)
+        except Exception:
+            pass
+        self.destroy()
+
+    # --- atajos globales ---
+    def _bind_shortcuts(self) -> None:
+        # Alt+1..8 -> vistas principales
+        nav_keys = [
+            "overview", "games", "translate", "images",
+            "review", "datasets", "jobs", "settings"
+        ]
+        for i, key in enumerate(nav_keys, 1):
+            self.bind(f"<Alt-Key-{i}>", lambda e, k=key: self.navigate(k))
+        # Ctrl+, -> Ajustes
+        self.bind("<Control-comma>", lambda e: self.navigate("settings"))
+        # Esc -> cierra toasts/diálogos modales
+        self.bind("<Escape>", self._on_escape)
+
+    def _on_escape(self, event=None) -> None:
+        # cierra toasts visibles
+        for t in self._toast_queue[:]:
+            try:
+                t.destroy()
+            except Exception:
+                pass
+        self._toast_queue.clear()
 
     # --- navegación ---
     def navigate(self, key: str) -> None:
@@ -142,12 +203,25 @@ class App(ctk.CTk):
         def _apply(res):
             self.topbar.hub.set(res[0])
             self.topbar.worker.set(res[1])
+            # backoff: si hub offline, duplica intervalo hasta máx 60s
+            if res[0] == "OFFLINE":
+                self._health_failures = min(self._health_failures + 1, 4)
+            else:
+                self._health_failures = 0
 
         self.run_async(_check, on_done=_apply)
-        self.after(15000, self._poll_health)
+        delay = 15000 * (2 ** self._health_failures)  # 15s, 30s, 60s, 60s, 60s
+        self.after(delay, self._poll_health)
 
     # --- toasts ---
     def toast(self, message: str, error: bool = False) -> None:
+        # límite 3 toasts simultáneos
+        while len(self._toast_queue) >= 3:
+            old = self._toast_queue.pop(0)
+            try:
+                old.destroy()
+            except Exception:
+                pass
         win = ctk.CTkToplevel(self)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -155,9 +229,25 @@ class App(ctk.CTk):
         ctk.CTkLabel(win, text=message, font=("Segoe UI", 11, "bold"), text_color=fg).pack(
             padx=16, pady=10
         )
-        x, y = self.winfo_x() + self.winfo_width() - 320, self.winfo_y() + 60
+        # apilar con offset vertical
+        base_y = self.winfo_y() + 60
+        offset = len(self._toast_queue) * 50
+        x = self.winfo_x() + self.winfo_width() - 320
+        y = base_y + offset
         win.geometry(f"+{x}+{y}")
-        self.after(3500, win.destroy)
+        self._toast_queue.append(win)
+
+        def _cleanup():
+            try:
+                self._toast_queue.remove(win)
+            except ValueError:
+                pass
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        self.after(3500, _cleanup)
 
     # --- updates (reutiliza gui/update.py) ---
     def _auto_update_check(self) -> None:

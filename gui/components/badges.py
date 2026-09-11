@@ -66,3 +66,13 @@ class ProgressBar(ctk.CTkFrame):
         frac = (done / total) if total else 0.0
         self._bar.set(max(0.0, min(1.0, frac)))
         self._label.configure(text=f"{done} / {total}" if total else "—")
+
+
+def progress_counts(counts: dict) -> tuple[int, int]:
+    """Progreso único para todas las vistas: hecho = total − pendientes.
+
+    Pendiente = EXTRACTED (extraído, sin traducir) + QUEUED.
+    """
+    total = counts.get("total", 0) or 0
+    pending = counts.get("EXTRACTED", 0) + counts.get("QUEUED", 0)
+    return max(0, total - pending), total

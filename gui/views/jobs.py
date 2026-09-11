@@ -6,7 +6,7 @@ from ..client import friendly_message
 from ..components.badges import StatusBadge
 from ..components.dialogs import EmptyState
 
-FILTERS = ["All", "RUNNING", "QUEUED", "COMPLETED", "FAILED"]
+FILTERS = ["Todos", "RUNNING", "QUEUED", "COMPLETED", "FAILED"]
 
 
 class JobsView(ctk.CTkScrollableFrame):
@@ -17,23 +17,23 @@ class JobsView(ctk.CTkScrollableFrame):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", pady=(0, 6))
         ctk.CTkLabel(
-            head, text="Jobs", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            head, text="Tareas", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(side="left")
         self.filter = ctk.CTkComboBox(head, values=FILTERS, width=130)
-        self.filter.set("All")
+        self.filter.set("Todos")
         self.filter.pack(side="right", padx=4)
-        ctk.CTkButton(head, text="Refresh", width=80, command=self._load).pack(side="right")
+        ctk.CTkButton(head, text="Actualizar", width=80, command=self._load).pack(side="right")
         self._list = ctk.CTkFrame(self, fg_color="transparent")
         self._list.pack(fill="both", expand=True)
         self._load()
 
     def _load(self) -> None:
-        want = "" if self.filter.get() == "All" else self.filter.get()
+        want = "" if self.filter.get() == "Todos" else self.filter.get()
         self.app.run_async(
             lambda: self.app.api.jobs(want),
             on_done=self._render,
             on_error=self._fail,
-            status="Cargando jobs…",
+            status="Cargando tareas…",
         )
 
     def _render(self, jobs: list) -> None:
@@ -41,7 +41,7 @@ class JobsView(ctk.CTkScrollableFrame):
         for child in self._list.winfo_children():
             child.destroy()
         if not jobs:
-            EmptyState(self._list, theme, "No active jobs", "").pack(fill="x")
+            EmptyState(self._list, theme, "Sin tareas activas", "").pack(fill="x")
             return
         for j in jobs[:50]:
             card = ctk.CTkFrame(self._list, fg_color=theme.get("surface"), corner_radius=8)
@@ -62,11 +62,11 @@ class JobsView(ctk.CTkScrollableFrame):
                 "text"
             ):
                 ctk.CTkButton(
-                    card, text="Retry", width=80, command=lambda jj=j: self._retry(jj)
+                    card, text="Reintentar", width=80, command=lambda jj=j: self._retry(jj)
                 ).pack(anchor="e", padx=10, pady=(0, 6))
 
     def _fail(self, e: Exception) -> None:
-        msg, details = friendly_message("Cargar jobs", e)
+        msg, details = friendly_message("Cargar tareas", e)
         EmptyState(self._list, self.app.theme, msg, details).pack(fill="x")
 
     def _retry(self, job: dict) -> None:

@@ -74,7 +74,7 @@ class EditorView(ctk.CTkFrame):
         left = ctk.CTkFrame(mid, fg_color=theme.get("surface"), corner_radius=10, width=220)
         left.pack(side="left", fill="y", padx=(0, 8), pady=8)
         ctk.CTkLabel(
-            left, text="REGIONS", font=("Segoe UI", 10), text_color=theme.get("text_muted")
+            left, text="REGIONES", font=("Segoe UI", 10), text_color=theme.get("text_muted")
         ).pack(anchor="w", padx=8, pady=(8, 0))
         self.tree = tk.Listbox(
             left,
@@ -107,7 +107,7 @@ class EditorView(ctk.CTkFrame):
         right = ctk.CTkFrame(mid, fg_color=theme.get("surface"), corner_radius=10, width=280)
         right.pack(side="right", fill="y", padx=(8, 0), pady=8)
         ctk.CTkLabel(
-            right, text="PROPERTIES", font=("Segoe UI", 10), text_color=theme.get("text_muted")
+            right, text="PROPIEDADES", font=("Segoe UI", 10), text_color=theme.get("text_muted")
         ).pack(anchor="w", padx=8, pady=(8, 0))
         self._badge = StatusBadge(right, theme, "REVIEW_REQUIRED")
         self._badge.pack(anchor="w", padx=8, pady=4)
@@ -132,12 +132,12 @@ class EditorView(ctk.CTkFrame):
         btns = ctk.CTkFrame(right, fg_color="transparent")
         btns.pack(padx=8, pady=6)
         ctk.CTkButton(
-            btns, text="Apply", width=80, fg_color=theme.get("accent"), command=self._apply_props
+            btns, text="Aplicar", width=80, fg_color=theme.get("accent"), command=self._apply_props
         ).pack(side="left", padx=2)
-        ctk.CTkButton(btns, text="Validate", width=80, command=self._validate_region).pack(
+        ctk.CTkButton(btns, text="Validar", width=80, command=self._validate_region).pack(
             side="left", padx=2
         )
-        ctk.CTkLabel(right, text="Mask: off/add/erase + brush", font=("Segoe UI", 10)).pack(
+        ctk.CTkLabel(right, text="Máscara: off/add/erase + pincel", font=("Segoe UI", 10)).pack(
             anchor="w", padx=8
         )
         mrow = ctk.CTkFrame(right, fg_color="transparent")

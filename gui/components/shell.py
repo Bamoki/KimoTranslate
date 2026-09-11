@@ -3,14 +3,14 @@
 import customtkinter as ctk
 
 NAV = [
-    ("overview", "Overview", None),
-    ("games", "Games", "WORKSPACE"),
-    ("translate", "Translate", None),
-    ("images", "Images", None),
-    ("review", "Review", None),
+    ("overview", "Resumen", None),
+    ("games", "Juegos", "TRABAJO"),
+    ("translate", "Traducir", None),
+    ("images", "Imágenes", None),
+    ("review", "Revisar", None),
     ("datasets", "Datasets", None),
-    ("jobs", "Jobs", "SYSTEM"),
-    ("settings", "Settings", None),
+    ("jobs", "Tareas", "SISTEMA"),
+    ("settings", "Ajustes", None),
 ]
 
 _MARKERS = {

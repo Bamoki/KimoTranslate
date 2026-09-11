@@ -28,6 +28,8 @@ def defaults() -> dict:
         "auto_update": True,
         "last_update_check": "",
         "config_version": CONFIG_VERSION,
+        "window_geometry": "",  # "WxH+X+Y"
+        "window_maximized": False,
     }
 
 

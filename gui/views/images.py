@@ -7,11 +7,11 @@ from ..components.badges import StatusBadge
 from ..components.dialogs import EmptyState
 
 FILTERS = [
-    ("All", ""),
+    ("Todos", ""),
     ("OCR", "OCR_DONE"),
-    ("Translated", "TRANSLATED"),
-    ("Localized", "LOCALIZED"),
-    ("Review", "REVIEW_REQUIRED"),
+    ("Traducidas", "TRANSLATED"),
+    ("Localizadas", "LOCALIZED"),
+    ("Revisar", "REVIEW_REQUIRED"),
 ]
 PAGE = 60
 
@@ -25,15 +25,15 @@ class ImagesView(ctk.CTkFrame):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=8, pady=(0, 6))
         ctk.CTkLabel(
-            head, text="Images", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            head, text="Imágenes", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(side="left")
         self.search = ctk.CTkEntry(head, placeholder_text="Buscar… (Ctrl+F)", width=220)
         self.search.pack(side="right", padx=4)
         self.search.bind("<Return>", lambda e: self._load())
         self.filter = ctk.CTkComboBox(head, values=[f[0] for f in FILTERS], width=130)
-        self.filter.set("All")
+        self.filter.set("Todos")
         self.filter.pack(side="right", padx=4)
-        ctk.CTkButton(head, text="Discover", width=90, command=self._discover).pack(
+        ctk.CTkButton(head, text="Descubrir", width=90, command=self._discover).pack(
             side="right", padx=4
         )
         self._grid = ctk.CTkScrollableFrame(self, fg_color="transparent")
@@ -55,7 +55,7 @@ class ImagesView(ctk.CTkFrame):
     def _load(self) -> None:
         gid = self._game()
         if not gid:
-            EmptyState(self._grid, self.app.theme, "No games found", "Add a game first.").pack()
+            EmptyState(self._grid, self.app.theme, "Sin juegos", "Añade un juego primero.").pack()
             return
         self.app.run_async(
             lambda: self.app.api.game_images(gid),
@@ -70,7 +70,7 @@ class ImagesView(ctk.CTkFrame):
         self._items = [
             a
             for a in items
-            if (not want or a.get("ocr_status") == want or want == "All")
+            if (not want or a.get("ocr_status") == want or want == "Todos")
             and (not q or q in a.get("relpath", "").lower())
         ]
         self._shown = 0
@@ -81,7 +81,7 @@ class ImagesView(ctk.CTkFrame):
                 self._grid,
                 self.app.theme,
                 "Sin imágenes",
-                "Discover para buscar recursos con texto.",
+                "Descubrir para buscar recursos con texto.",
             ).pack()
             return
         self._more()
@@ -101,12 +101,12 @@ class ImagesView(ctk.CTkFrame):
                 card, theme, a.get("localization_status") or a.get("ocr_status", "DISCOVERED")
             ).pack(pady=4)
             ctk.CTkButton(
-                card, text="Open", width=80, command=lambda i=a["id"]: self._open(i)
+                card, text="Abrir", width=80, command=lambda i=a["id"]: self._open(i)
             ).pack(pady=(0, 6))
         self._shown += len(batch)
         if self._shown < len(self._items):
             ctk.CTkButton(
-                self._grid, text=f"More ({len(self._items) - self._shown})", command=self._more
+                self._grid, text=f"Más ({len(self._items) - self._shown})", command=self._more
             ).pack(side="left", padx=6)
 
     def _fail(self, e: Exception) -> None:
@@ -118,9 +118,9 @@ class ImagesView(ctk.CTkFrame):
         if gid:
             self.app.run_async(
                 lambda: self.app.api.discover_images(gid),
-                on_done=lambda r: (self.app.toast("Discover OK"), self._load()),
+                on_done=lambda r: (self.app.toast("Descubrimiento OK"), self._load()),
                 on_error=self._fail,
-                status="Discover…",
+                status="Descubriendo…",
             )
 
     def _open(self, image_id: str) -> None:

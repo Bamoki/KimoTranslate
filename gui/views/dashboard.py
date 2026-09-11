@@ -3,7 +3,7 @@
 import customtkinter as ctk
 
 from ..client import friendly_message
-from ..components.badges import ProgressBar
+from ..components.badges import ProgressBar, progress_counts
 from ..components.dialogs import EmptyState
 
 
@@ -21,14 +21,15 @@ class DashboardView(ctk.CTkFrame):
         self._sub.pack(anchor="w", padx=8, pady=(0, 12))
         self._cards = ctk.CTkFrame(self, fg_color="transparent")
         self._cards.pack(fill="x", padx=8)
+        self._cards.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="cards")
         self._active_title = ctk.CTkLabel(
-            self, text="ACTIVE PROJECT", font=("Segoe UI", 10), text_color=theme.get("text_muted")
+            self, text="PROYECTO ACTIVO", font=("Segoe UI", 10), text_color=theme.get("text_muted")
         )
         self._active_title.pack(anchor="w", padx=8, pady=(16, 4))
         self._active = ctk.CTkFrame(self, fg_color=theme.get("surface"), corner_radius=10)
         self._active.pack(fill="x", padx=8)
         self._activity_title = ctk.CTkLabel(
-            self, text="RECENT ACTIVITY", font=("Segoe UI", 10), text_color=theme.get("text_muted")
+            self, text="ACTIVIDAD RECIENTE", font=("Segoe UI", 10), text_color=theme.get("text_muted")
         )
         self._activity_title.pack(anchor="w", padx=8, pady=(16, 4))
         self._activity = ctk.CTkTextbox(self, height=120, font=("Segoe UI", 11))
@@ -48,41 +49,44 @@ class DashboardView(ctk.CTkFrame):
         theme = self.app.theme
         games, jobs, reviews = data["games"], data["jobs"], data["reviews"]
         pending = sum(1 for j in jobs if j.get("status") in ("QUEUED", "RUNNING"))
+        running = any(j.get("status") == "RUNNING" for j in jobs)
         for child in self._cards.winfo_children():
             child.destroy()
-        for label, value in (
-            ("Games", len(games)),
-            ("Jobs", len(jobs)),
-            ("Reviews", len(reviews)),
-            ("Worker", "●" if jobs else "●"),
-        ):
+        # grid responsivo: 4 columnas máx, se adapta al ancho
+        self._cards.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="cards")
+        for idx, (label, value) in enumerate((
+            ("Juegos", len(games)),
+            ("Tareas", len(jobs)),
+            ("Revisiones", len(reviews)),
+            ("Worker", "Ocupado" if running else "En línea"),
+        )):
             card = ctk.CTkFrame(
-                self._cards, fg_color=theme.get("surface"), corner_radius=10, width=140, height=70
+                self._cards, fg_color=theme.get("surface"), corner_radius=10, height=70
             )
-            card.pack(side="left", padx=6)
+            card.grid(row=0, column=idx, sticky="nsew", padx=6, pady=6)
+            card.grid_propagate(False)
             ctk.CTkLabel(
                 card, text=str(value), font=("Segoe UI", 22, "bold"), text_color=theme.get("accent")
-            ).pack()
+            ).pack(expand=True)
             ctk.CTkLabel(
                 card, text=label, font=("Segoe UI", 11), text_color=theme.get("text_secondary")
             ).pack()
-        self._sub.configure(text=f"{pending} jobs activos")
+        self._sub.configure(text=f"{pending} tareas activas")
         for child in self._active.winfo_children():
             child.destroy()
         if not games:
             EmptyState(
                 self._active,
                 theme,
-                "No games found",
-                "Add a game directory to begin.",
-                "Games",
+                "Sin juegos",
+                "Añade un directorio de juego para empezar.",
+                "Juegos",
                 lambda: self.app.navigate("games"),
             ).pack(fill="x", padx=8, pady=8)
             return
         g = games[0]
         counts = g.get("counts") or {}
-        total = counts.get("total", 0) or 1
-        done = total - counts.get("EXTRACTED", 0)
+        done, total = progress_counts(counts)
         ctk.CTkLabel(
             self._active, text=g.get("name", g.get("game_id", "?")), font=("Segoe UI", 14, "bold")
         ).pack(anchor="w", padx=12, pady=(8, 0))

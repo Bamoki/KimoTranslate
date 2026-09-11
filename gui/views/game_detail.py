@@ -3,7 +3,7 @@
 import customtkinter as ctk
 
 from ..client import friendly_message
-from ..components.badges import ProgressBar
+from ..components.badges import ProgressBar, progress_counts
 from ..components.dialogs import ErrorDialog
 
 STEPS = ["DETECT", "EXTRACT", "TRANSLATE", "OCR", "REVIEW", "LOCALIZE", "EXPORT", "VERIFY"]
@@ -23,7 +23,7 @@ class GameDetailView(ctk.CTkFrame):
         self._steps.pack(fill="x", padx=8, pady=6)
         self._tabs = ctk.CTkTabview(self)
         self._tabs.pack(fill="both", expand=True, padx=8, pady=8)
-        for name in ("Overview", "Text", "Images", "Review", "Export", "Integrity"):
+        for name in ("Resumen", "Textos", "Imágenes", "Revisar", "Exportar", "Integridad"):
             self._tabs.add(name)
         app.run_async(
             lambda: app.api.game(game_id),
@@ -52,7 +52,7 @@ class GameDetailView(ctk.CTkFrame):
             ctk.CTkLabel(
                 self._steps, text=f"{step}{arrow}", font=("Segoe UI", 10, "bold"), text_color=color
             ).pack(side="left")
-        ov = self._tabs.tab("Overview")
+        ov = self._tabs.tab("Resumen")
         for child in ov.winfo_children():
             child.destroy()
         info = (
@@ -69,20 +69,21 @@ class GameDetailView(ctk.CTkFrame):
         ).pack(anchor="w", padx=12, pady=8)
         bar = ProgressBar(ov, theme)
         bar.pack(fill="x", padx=12)
-        bar.set(total - counts.get("EXTRACTED", 0), total)
+        done, bar_total = progress_counts(counts)
+        bar.set(done, bar_total)
         # Acciones con jerarquía: primaria + secundarias.
         row = ctk.CTkFrame(ov, fg_color="transparent")
         row.pack(fill="x", padx=12, pady=10)
         primary = ctk.CTkButton(
-            row, text="Translate", width=110, fg_color=theme.get("accent"), command=self._translate
+            row, text="Traducir", width=110, fg_color=theme.get("accent"), command=self._translate
         )
         primary.pack(side="left", padx=4)
         for label, fn in (
-            ("Extract", self._extract),
-            ("Images", self._images),
-            ("Review", lambda: self.app.navigate("review")),
-            ("Export", self._export),
-            ("Integrity", self._integrity),
+            ("Extraer", self._extract),
+            ("Imágenes", self._images),
+            ("Revisar", lambda: self.app.navigate("review")),
+            ("Exportar", self._export),
+            ("Integridad", self._integrity),
         ):
             ctk.CTkButton(
                 row,
@@ -93,8 +94,8 @@ class GameDetailView(ctk.CTkFrame):
                 text_color=theme.get("text"),
                 command=fn,
             ).pack(side="left", padx=4)
-        # Tab Text: resumen + ir a review.
-        tx = self._tabs.tab("Text")
+        # Tab Textos: resumen + ir a revisión.
+        tx = self._tabs.tab("Textos")
         for child in tx.winfo_children():
             child.destroy()
         ctk.CTkLabel(
@@ -102,17 +103,17 @@ class GameDetailView(ctk.CTkFrame):
             text=f"{total} textos · {counts.get('VALIDATED', 0)} validados",
             font=("Segoe UI", 12),
         ).pack(padx=12, pady=8, anchor="w")
-        ctk.CTkButton(tx, text="Open Review", command=lambda: self.app.navigate("review")).pack(
+        ctk.CTkButton(tx, text="Abrir revisión", command=lambda: self.app.navigate("review")).pack(
             padx=12, anchor="w"
         )
-        # Tab Images: conteo + ir a la biblioteca.
-        im = self._tabs.tab("Images")
+        # Tab Imágenes: conteo + ir a la biblioteca.
+        im = self._tabs.tab("Imágenes")
         for child in im.winfo_children():
             child.destroy()
         ctk.CTkLabel(
             im, text="Imágenes del juego (OCR + localización).", font=("Segoe UI", 12)
         ).pack(padx=12, pady=8, anchor="w")
-        ctk.CTkButton(im, text="Open Images", command=lambda: self.app.navigate("images")).pack(
+        ctk.CTkButton(im, text="Abrir imágenes", command=lambda: self.app.navigate("images")).pack(
             padx=12, anchor="w"
         )
 
@@ -141,22 +142,22 @@ class GameDetailView(ctk.CTkFrame):
 
     def _fail(self, e: Exception) -> None:
         msg, details = friendly_message("Cargar juego", e)
-        ErrorDialog(self, self.app.theme, "Game failed", msg, details)
+        ErrorDialog(self, self.app.theme, "Error al cargar el juego", msg, details)
 
     def _extract(self) -> None:
         self.app.run_async(
             lambda: self.app.api.extract_game(self.game_id),
-            on_done=lambda r: self.app.toast("Extract encolado"),
+            on_done=lambda r: self.app.toast("Extracción encolada"),
             on_error=lambda e: self._fail(e),
-            status="Extract…",
+            status="Extrayendo…",
         )
 
     def _translate(self) -> None:
         self.app.run_async(
             lambda: self.app.api.translate_game(self.game_id),
-            on_done=lambda r: self.app.toast(f"Translate: {r}"),
+            on_done=lambda r: self.app.toast(f"Traducción: {r}"),
             on_error=lambda e: self._fail(e),
-            status="Translate…",
+            status="Traduciendo…",
         )
 
     def _images(self) -> None:
@@ -168,17 +169,17 @@ class GameDetailView(ctk.CTkFrame):
         out = os.path.join(os.path.expanduser("~"), "KimoTranslate", self.game_id + "_es")
         self.app.run_async(
             lambda: self.app.api.export_game(self.game_id, out),
-            on_done=lambda r: self.app.toast("Export encolado"),
+            on_done=lambda r: self.app.toast("Exportación encolada"),
             on_error=lambda e: self._fail(e),
-            status="Export…",
+            status="Exportando…",
         )
 
     def _integrity(self) -> None:
         self.app.run_async(
             lambda: self.app.api.game_integrity(self.game_id),
             on_done=lambda r: self.app.toast(
-                "Integrity PASS" if r.get("ok") else "Integrity FAIL", error=not r.get("ok")
+                "Integridad OK" if r.get("ok") else "Integridad FALLO", error=not r.get("ok")
             ),
             on_error=lambda e: self._fail(e),
-            status="Integrity…",
+            status="Verificando…",
         )

@@ -8,7 +8,7 @@ DARK = {
     "border": "#3B4261",
     "text": "#C0CAF5",
     "text_secondary": "#9AA5CE",
-    "text_muted": "#565F89",
+    "text_muted": "#7A86B8",
     "accent": "#7AA2F7",
     "accent_hover": "#5D7FD6",
     "success": "#9ECE6A",

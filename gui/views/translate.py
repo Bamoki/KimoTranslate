@@ -13,7 +13,7 @@ class TranslateView(ctk.CTkScrollableFrame):
         self.app = app
         theme = app.theme
         ctk.CTkLabel(
-            self, text="Translate", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            self, text="Traducir", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(anchor="w", padx=8)
         form = ctk.CTkFrame(self, fg_color=theme.get("surface"), corner_radius=10)
         form.pack(fill="x", padx=8, pady=8)
@@ -24,7 +24,7 @@ class TranslateView(ctk.CTkScrollableFrame):
         self.provider.pack(side="left", padx=8, pady=8)
         self.model = ctk.CTkEntry(form, placeholder_text="Modelo (vacío = default)", width=200)
         self.model.pack(side="left", padx=8)
-        self.game = ctk.CTkEntry(form, placeholder_text="Game (vacío = todos)", width=160)
+        self.game = ctk.CTkEntry(form, placeholder_text="Juego (vacío = todos)", width=160)
         self.game.pack(side="left", padx=8)
         ctk.CTkButton(
             form, text="Traducir pendientes", fg_color=theme.get("accent"), command=self._go
@@ -42,7 +42,7 @@ class TranslateView(ctk.CTkScrollableFrame):
     def _go(self) -> None:
         gid = self.game.get().strip()
         if not gid:
-            self._status.configure(text="Indica un game para traducir sus pendientes")
+            self._status.configure(text="Indica un juego para traducir sus pendientes")
             return
         self.app.run_async(
             lambda: self.app.api.translate_game(
@@ -65,7 +65,7 @@ class TranslateView(ctk.CTkScrollableFrame):
             child.destroy()
         recent = jobs[:10]
         if not recent:
-            EmptyState(self._jobs_box, theme, "No active jobs", "").pack(fill="x")
+            EmptyState(self._jobs_box, theme, "Sin tareas activas", "").pack(fill="x")
             return
         for j in recent:
             row = ctk.CTkFrame(self._jobs_box, fg_color=theme.get("surface"), corner_radius=8)

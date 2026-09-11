@@ -5,7 +5,7 @@ import customtkinter as ctk
 from ..client import friendly_message
 from ..components.badges import StatusBadge
 
-FILTERS = ["All", "generated", "REVIEW_REQUIRED", "corrected", "validated", "rejected"]
+FILTERS = ["Todos", "generated", "REVIEW_REQUIRED", "corrected", "validated", "rejected"]
 
 
 class ReviewView(ctk.CTkFrame):
@@ -16,22 +16,22 @@ class ReviewView(ctk.CTkFrame):
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.pack(fill="x", padx=8, pady=(0, 6))
         ctk.CTkLabel(
-            head, text="Review", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
+            head, text="Revisar", font=("Segoe UI", 20, "bold"), text_color=theme.get("text")
         ).pack(side="left")
         self.filter = ctk.CTkComboBox(head, values=FILTERS, width=150)
         self.filter.set("REVIEW_REQUIRED")
         self.filter.pack(side="right", padx=4)
-        ctk.CTkButton(head, text="Reload", width=80, command=self._load).pack(side="right", padx=4)
+        ctk.CTkButton(head, text="Recargar", width=80, command=self._load).pack(side="right", padx=4)
         self._pos = ctk.CTkLabel(
             head, text="", font=("Segoe UI", 11), text_color=theme.get("text_secondary")
         )
         self._pos.pack(side="right", padx=8)
         nav = ctk.CTkFrame(head, fg_color="transparent")
         nav.pack(side="right", padx=4)
-        ctk.CTkButton(nav, text="← Previous", width=90, command=lambda: self._step(-1)).pack(
+        ctk.CTkButton(nav, text="← Anterior", width=90, command=lambda: self._step(-1)).pack(
             side="left", padx=2
         )
-        ctk.CTkButton(nav, text="Next →", width=90, command=lambda: self._step(1)).pack(
+        ctk.CTkButton(nav, text="Siguiente →", width=90, command=lambda: self._step(1)).pack(
             side="left", padx=2
         )
         self._items: list = []
@@ -43,8 +43,8 @@ class ReviewView(ctk.CTkFrame):
         self._boxes = {}
         for key, label in (
             ("source", "Original"),
-            ("machine", "Machine translation"),
-            ("corrected", "Human correction"),
+            ("machine", "Traducción automática"),
+            ("corrected", "Corrección humana"),
         ):
             ctk.CTkLabel(
                 body,
@@ -59,10 +59,10 @@ class ReviewView(ctk.CTkFrame):
         row = ctk.CTkFrame(body, fg_color="transparent")
         row.pack(fill="x", pady=6)
         for label, fn, primary in (
-            ("Save", self._save, False),
-            ("Validate", self._validate, True),
-            ("Reject", self._reject, False),
-            ("To terminology", self._to_term, False),
+            ("Guardar", self._save, False),
+            ("Validar", self._validate, True),
+            ("Rechazar", self._reject, False),
+            ("A terminología", self._to_term, False),
         ):
             fg = theme.get("accent") if primary else "transparent"
             ctk.CTkButton(
@@ -71,7 +71,7 @@ class ReviewView(ctk.CTkFrame):
         self._load()
 
     def _load(self) -> None:
-        status = "" if self.filter.get() == "All" else self.filter.get()
+        status = "" if self.filter.get() == "Todos" else self.filter.get()
         self.app.run_async(
             lambda: self.app.api.corrections(status=status),
             on_done=self._render,
@@ -94,7 +94,7 @@ class ReviewView(ctk.CTkFrame):
                 box.configure(state="normal")
                 box.delete("1.0", "end")
                 box.configure(state="disabled" if box != self._boxes["corrected"] else "normal")
-            self._pos.configure(text="Nothing to review — All translations are validated.")
+            self._pos.configure(text="Nada que revisar — Todo validado.")
             self._badge.set("VALIDATED")
             return
         self._idx = max(0, min(self._idx, len(self._items) - 1))
@@ -128,7 +128,7 @@ class ReviewView(ctk.CTkFrame):
         text = self._boxes["corrected"].get("1.0", "end").strip()
         self.app.run_async(
             lambda: self.app.api.patch_correction(item["id"], {"corrected_translation": text}),
-            on_done=lambda r: (self.app.toast("Saved"), self._load()),
+            on_done=lambda r: (self.app.toast("Guardado"), self._load()),
             on_error=lambda e: self.app.toast(str(e), error=True),
         )
 
@@ -140,7 +140,7 @@ class ReviewView(ctk.CTkFrame):
         self.app.run_async(
             lambda: self.app.api.patch_correction(item["id"], {"validated": True}),
             on_done=lambda r: (
-                self.app.toast("VALIDATED — promovido a TM"),
+                self.app.toast("VALIDADO — promovido a TM"),
                 self._items.pop(self._idx),
                 self._show(),
             ),
@@ -169,6 +169,6 @@ class ReviewView(ctk.CTkFrame):
         }
         self.app.run_async(
             lambda: self.app.api.add_term(body),
-            on_done=lambda r: self.app.toast(f"Terminology ✓ ({r.get('scope')})"),
+            on_done=lambda r: self.app.toast(f"Terminología ✓ ({r.get('scope')})"),
             on_error=lambda e: self.app.toast(str(e), error=True),
         )

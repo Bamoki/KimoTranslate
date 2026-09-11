@@ -19,10 +19,10 @@ class DatasetsView(ctk.CTkScrollableFrame):
         self.source_app = ctk.CTkComboBox(row, values=["kimotranslate", "tradujap"], width=150)
         self.source_app.set("kimotranslate")
         self.source_app.pack(side="left", padx=4)
-        self.domain = ctk.CTkEntry(row, placeholder_text="domain", width=160)
+        self.domain = ctk.CTkEntry(row, placeholder_text="dominio", width=160)
         self.domain.pack(side="left", padx=4)
         ctk.CTkButton(
-            row, text="Build dataset", width=130, fg_color=theme.get("accent"), command=self._build
+            row, text="Construir dataset", width=130, fg_color=theme.get("accent"), command=self._build
         ).pack(side="left", padx=4)
         self._list = ctk.CTkFrame(self, fg_color="transparent")
         self._list.pack(fill="both", expand=True, padx=8)
@@ -42,7 +42,7 @@ class DatasetsView(ctk.CTkScrollableFrame):
             child.destroy()
         if not items:
             EmptyState(
-                self._list, theme, "No datasets", "Valida correcciones y construye el primero."
+                self._list, theme, "Sin datasets", "Valida correcciones y construye el primero."
             ).pack(fill="x")
             return
         for d in items:
