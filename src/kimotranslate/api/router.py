@@ -173,6 +173,7 @@ def list_jobs() -> list:
             "provider": (j.get("metrics") or {}).get("provider"),
             "model": (j.get("metrics") or {}).get("model"),
             "error": j.get("error"),
+            "metrics": {"request": (j.get("metrics") or {}).get("request", {})},
         }
         for j in jobs
     ]

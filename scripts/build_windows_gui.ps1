@@ -21,9 +21,9 @@ $Version = (Select-String -Path "src/kimotranslate/__init__.py" -Pattern '__vers
 Write-Host "KimoTranslate version: $Version"
 $Version | Out-File -Encoding utf8 -NoNewline "build_version.txt"
 
-# 2. PyInstaller (solo build-time; el .exe final no necesita Python).
+# 2. PyInstaller + CustomTkinter (solo build-time; el .exe final no necesita Python).
 python -c "import tkinter"  # falla si tkinter no está instalado
-pip install --quiet pyinstaller
+pip install --quiet pyinstaller customtkinter
 Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
 pyinstaller KimoTranslate.spec --noconfirm
 if ($LASTEXITCODE -ne 0) { throw "pyinstaller failed" }

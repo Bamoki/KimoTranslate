@@ -13,11 +13,10 @@ gui_app = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ("gui/tkinter/config.py", "gui/tkinter"),
-        ("gui/update.py", "gui"),
+        ("gui", "gui"),  # vistas/componentes por path (import dinámico) + config/update
         ("build_version.txt", "."),
     ],
-    hiddenimports=[],
+    hiddenimports=["customtkinter"],
     excludes=["PIL", "numpy", "httpx", "fastapi", "uvicorn", "pydantic"],
 )
 

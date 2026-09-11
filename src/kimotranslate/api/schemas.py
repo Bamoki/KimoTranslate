@@ -68,6 +68,7 @@ class JobResultOut(BaseModel):
     provider: str | None = None
     model: str | None = None
     error: str | None = None
+    metrics: dict = Field(default_factory=dict)
 
 
 class ProviderOut(BaseModel):

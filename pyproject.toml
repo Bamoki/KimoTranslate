@@ -1,6 +1,6 @@
 [project]
 name = "kimotranslate"
-version = "0.8.0"
+version = "0.8.1"
 description = "Game localization tool: Windows GUI + Raspberry Pi server + worker. Fase 1 skeleton."
 requires-python = ">=3.11"
 dependencies = [

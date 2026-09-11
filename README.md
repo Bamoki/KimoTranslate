@@ -17,6 +17,24 @@ PC Windows: KimoTranslate.exe (solo GUI, sin Python)
 Raspberry Pi :8005 (API) + Raspberry-Hub (jobs/workers/descargas)
 ```
 
+## GUI 0.8.1 (CustomTkinter, dark por defecto)
+
+```text
+Topbar (ruta + Hub ● Worker ●) / Sidebar / Contenido / Estado+toasts
+Overview (proyectos, jobs, reviews, actividad) · Games (cards + progreso)
+Game Detail (stepper DETECT→VERIFY + tabs) · Translate (provider/modelo)
+Images (biblioteca + filtros + lazy) · Review (prev/next + validación)
+Jobs (filtros + retry en FAILED) · Datasets · Settings (categorías)
+Editor (canvas zoom/pan/handles, regiones, propiedades, máscara, undo/redo)
+```
+
+* Hilos para todo lo largo (la GUI nunca se congela); sin modelos/OCR en GUI.
+* Estados/toasts/empty states; errores amables + detalles técnicos aparte.
+* Atajos: Ctrl+S/Z/Y/F, Delete, rueda zoom. DPI: layout fluido + mín 900×600.
+* `pip install customtkinter` (build-time y dev Windows; el .exe lo lleva dentro).
+* TKinterModernThemes evaluado y descartado (2º framework = inconsistencia).
+* Dev: `python gui\tkinter\app.py`. Smoke visual en Windows (checklist abajo).
+
 ### Instalar la GUI (usuario final)
 
 1. En Raspberry-Hub: **Descargas → KimoTranslate → Descargar**.
@@ -28,7 +46,7 @@ Raspberry Pi :8005 (API) + Raspberry-Hub (jobs/workers/descargas)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_gui.ps1
-# genera dist/KimoTranslate-0.8.0.exe + .sha256 (+ KimoTranslate-Updater.exe)
+# genera dist/KimoTranslate-<version>.exe + .sha256 (+ KimoTranslate-Updater.exe)
 # publicar en el Hub (requiere admin):
 powershell ... -Publish -HubUrl http://192.168.1.20:8000 -HubUser admin -HubPassword $env:HUB_PASS
 ```

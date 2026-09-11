@@ -130,6 +130,7 @@ class TranslationService:
             "provider": metrics.get("provider"),
             "model": metrics.get("model"),
             "error": job.get("error"),
+            "metrics": {"request": metrics.get("request", {})},
         }
         if job.get("status") == "COMPLETED" and metrics.get("translation"):
             req = metrics.get("request", {})
