@@ -6,7 +6,7 @@ NO probado en Linux: ejecutar scripts/build_windows_gui.ps1 en Windows.
 """
 import os
 
-VERSION = open("build_version.txt", encoding="utf-8").read().strip()
+VERSION = open("build_version.txt", encoding="utf-8-sig").read().strip()
 
 gui_app = Analysis(
     ["gui/tkinter/app.py"],

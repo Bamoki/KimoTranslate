@@ -11,7 +11,7 @@ import customtkinter as ctk
 
 from . import update as update_mod
 from .client import KimoApiClient, friendly_message
-from .shell import Sidebar, Statusbar, Topbar
+from .components.shell import Sidebar, Statusbar, Topbar
 from .theme.theme import Theme
 from .tkinter import config as config_mod
 
@@ -76,20 +76,20 @@ class App(ctk.CTk):
         view.pack(fill="both", expand=True)
         self._views[key] = view
         titles = {
-            "overview": "Overview",
-            "games": "Games",
-            "translate": "Translate",
-            "images": "Images",
-            "review": "Review",
+            "overview": "Resumen",
+            "games": "Juegos",
+            "translate": "Traducir",
+            "images": "Imágenes",
+            "review": "Revisar",
             "datasets": "Datasets",
-            "jobs": "Jobs",
-            "settings": "Settings",
-            "game_detail": "Game",
+            "jobs": "Tareas",
+            "settings": "Ajustes",
+            "game_detail": "Juego",
             "editor": "Editor",
         }
         title = titles.get(key, key)
         if param and key in ("game_detail", "editor"):
-            title = f"Game / {param}" if key == "game_detail" else f"Editor / {param}"
+            title = f"Juego / {param}" if key == "game_detail" else f"Editor / {param}"
         self.topbar.set_location(title)
 
     # --- tareas en fondo (no bloquean) ---

@@ -19,11 +19,11 @@ Set-Location $Root
 # 1. Versión única desde src (NO duplicar).
 $Version = (Select-String -Path "src/kimotranslate/__init__.py" -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
 Write-Host "KimoTranslate version: $Version"
-$Version | Out-File -Encoding utf8 -NoNewline "build_version.txt"
+[System.IO.File]::WriteAllText("$Root\build_version.txt", $Version, (New-Object System.Text.UTF8Encoding $false))
 
 # 2. PyInstaller + CustomTkinter (solo build-time; el .exe final no necesita Python).
 python -c "import tkinter"  # falla si tkinter no está instalado
-pip install --quiet pyinstaller customtkinter
+pip install --quiet --disable-pip-version-check pyinstaller customtkinter
 Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
 pyinstaller KimoTranslate.spec --noconfirm
 if ($LASTEXITCODE -ne 0) { throw "pyinstaller failed" }
@@ -33,7 +33,7 @@ $UpdExe = "dist/KimoTranslate-Updater.exe"
 $GuiFinal = "dist/KimoTranslate-$Version.exe"
 Copy-Item $GuiExe $GuiFinal -Force
 $Sha = (Get-FileHash $GuiFinal -Algorithm SHA256).Hash.ToLower()
-$Sha | Out-File -Encoding utf8 -NoNewline "$GuiFinal.sha256"
+[System.IO.File]::WriteAllText("$GuiFinal.sha256", $Sha, (New-Object System.Text.UTF8Encoding $false))
 $Size = (Get-Item $GuiFinal).Length
 Write-Host "EXE: $GuiFinal ($Size bytes) sha256=$Sha"
 Write-Host "Updater: $UpdExe ($((Get-Item $UpdExe).Length) bytes)"

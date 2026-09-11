@@ -30,7 +30,15 @@ class KimoApiClient:
         self.timeout = timeout
 
     def _call(self, method: str, path: str, body: dict | None = None, params: dict | None = None):
+        query = ""
+        if "?" in path:  # extract_game añade ?local=true al path
+            path, query = path.split("?", 1)
+        # IDs con espacios u otros reservados (p. ej. "natsu no kusari"):
+        # escapar por segmento para no romper la URL (sin duplicar el / inicial).
+        path = "/".join(urllib.parse.quote(seg, safe="") for seg in path.split("/"))
         url = self.base_url + path
+        if query:
+            url += "?" + query
         if params:
             url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v != ""})
         data = json.dumps(body).encode() if body is not None else None
@@ -181,7 +189,11 @@ class KimoApiClient:
         return self._get(f"/games/{game_id}/images/{image_id}")
 
     def image_artifact(self, game_id: str, image_id: str, name: str) -> bytes:
-        url = f"{self.base_url}/games/{game_id}/images/{image_id}/artifact/{name}"
+        segs = "/".join(
+            urllib.parse.quote(s, safe="")
+            for s in ("games", game_id, "images", image_id, "artifact", name)
+        )
+        url = f"{self.base_url}/{segs}"
         try:
             with urllib.request.urlopen(url, timeout=self.timeout) as res:
                 return res.read()

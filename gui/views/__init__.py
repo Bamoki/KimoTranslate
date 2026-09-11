@@ -1,6 +1,9 @@
 """Registro de vistas + editor (import lazy: sin display no se toca tkinter)."""
 
-REGISTRY: dict = {}
+# OJO: no exponer `REGISTRY = {}` como atributo de módulo: PEP 562
+# (`__getattr__`) solo se invoca si el atributo NO existe, y un dict
+# vacío haría que `views.REGISTRY` devolviera siempre vacío sin registrar.
+_CACHE: dict = {}
 
 
 def register() -> dict:
@@ -30,7 +33,8 @@ def register() -> dict:
 
 
 def __getattr__(name: str):
-    if name == "REGISTRY" and not REGISTRY:
-        REGISTRY.update(register())
-        return REGISTRY
-    raise AttributeError(name)
+    if name == "REGISTRY":
+        if not _CACHE:
+            _CACHE.update(register())
+        return _CACHE
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
